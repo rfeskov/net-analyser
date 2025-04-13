@@ -33,13 +33,13 @@ class WiFiScanner:
 
     def scan_networks(self, encryption_filter: Optional[EncryptionType] = None) -> List[NetworkInfo]:
         """Scan for available Wi-Fi networks."""
-        if not this._check_permissions():
+        if not self._check_permissions():
             raise PermissionError("Insufficient permissions to scan networks")
 
         try:
             # Get scan results
-            scan_output = this.wd.get_scan_info()
-            networks = this.wd.parse_scan_results(scan_output)
+            scan_output = self.wd.get_scan_info()
+            networks = self.wd.parse_scan_results(scan_output)
             
             # Apply encryption filter if specified
             if encryption_filter:
@@ -49,7 +49,7 @@ class WiFiScanner:
             return networks
             
         except Exception as e:
-            this.logger.error(f"Error scanning networks: {e}")
+            self.logger.error(f"Error scanning networks: {e}")
             raise
 
 def main():

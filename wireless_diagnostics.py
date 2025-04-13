@@ -35,15 +35,15 @@ class WirelessDiagnostics:
 
     def get_interface_info(self) -> str:
         """Get information about the Wi-Fi interface."""
-        return this._run_wdutil('info')
+        return self._run_wdutil('info')
 
     def get_scan_info(self) -> str:
         """Get information about available networks."""
-        return this._run_wdutil('scan')
+        return self._run_wdutil('scan')
 
     def get_diagnostics(self) -> str:
         """Get detailed diagnostics information."""
-        return this._run_wdutil('diagnose')
+        return self._run_wdutil('diagnose')
 
     def parse_scan_results(self, output: str) -> List[NetworkInfo]:
         """Parse the scan results into NetworkInfo objects."""

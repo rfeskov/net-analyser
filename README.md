@@ -1,39 +1,49 @@
 # Wi-Fi Network Scanner
 
-A Python program for scanning available Wi-Fi networks on macOS and Linux systems. This program provides detailed information about nearby networks including SSID, BSSID, signal strength, channel, frequency, and encryption type.
+A Python-based Wi-Fi network scanner that works on both macOS and Linux systems. This tool scans for available Wi-Fi networks and displays detailed information about each network, including SSID, BSSID (MAC address), signal strength, channel, frequency, and encryption type.
 
 ## Features
 
-- Detects and lists all available Wi-Fi networks
-- Shows detailed network information:
-  - SSID (Network name)
-  - BSSID (MAC address)
-  - Signal strength (in dBm)
-  - Channel number
-  - Frequency (2.4 GHz or 5 GHz)
-  - Encryption type (WEP, WPA, WPA2, WPA3)
-- Supports filtering networks by encryption type
-- Works on both macOS and Linux systems
-- Uses the Wireless Diagnostics framework on macOS for enhanced capabilities
+- Automatic OS detection (macOS/Linux)
+- Dynamic wireless interface detection
+- Detailed network information display
+- Filtering by encryption type
+- Error handling for permissions and scanning issues
+- Clean, tabular output format
 
 ## Requirements
 
+### macOS
 - Python 3.6 or higher
-- macOS 10.15 (Catalina) or higher for Wireless Diagnostics support
-- Linux systems with `iwlist` command available
-- Root/sudo privileges for scanning networks
+- `system_profiler` command (built into macOS) - primary scanning method
+- Note: The scanner uses system_profiler to get real-time information about available Wi-Fi networks
+
+### Linux
+- Python 3.6 or higher
+- `wireless-tools` package (provides `iwlist` command)
+- Root/sudo privileges for scanning
 
 ## Installation
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/wifi-scanner.git
+git clone <repository-url>
 cd wifi-scanner
 ```
 
-2. Install required dependencies:
+2. Make the script executable:
 ```bash
-pip install -r requirements.txt
+chmod +x wifi_scanner.py
+```
+
+### Linux Dependencies
+On Linux systems, install the required wireless tools:
+```bash
+# Debian/Ubuntu
+sudo apt-get install wireless-tools
+
+# Fedora/RHEL
+sudo dnf install wireless-tools
 ```
 
 ## Usage
@@ -41,57 +51,65 @@ pip install -r requirements.txt
 Run the scanner with sudo/root privileges:
 
 ```bash
+# Basic scan
 sudo python3 wifi_scanner.py
+
+# Filter networks by encryption type
+sudo python3 wifi_scanner.py --filter WPA2
+sudo python3 wifi_scanner.py --filter Open
+
+# Enable debug logging
+sudo python3 wifi_scanner.py --debug
 ```
 
-### Output Format
+Available encryption type filters:
+- WPA3
+- WPA2
+- WPA
+- WEP
+- Open
 
-The program displays networks in a table format:
-```
-SSID                           Signal     Channel    Frequency  Security   
---------------------------------------------------------------------------------
-MyNetwork                      -65 dBm    36         5.0        WPA2       
-Neighbor's WiFi               -72 dBm    1          2.4        WPA3       
-```
+## Output Format
 
-## Wireless Diagnostics Framework
-
-On macOS, this program uses the Wireless Diagnostics framework (`wdutil`) to access detailed Wi-Fi information. This provides several advantages:
-
-1. More accurate signal strength measurements
-2. Detailed BSSID information
-3. Precise channel and frequency data
-4. Better encryption type detection
-5. Access to hidden networks
-
-### Troubleshooting
-
-If you encounter permission issues:
-
-1. Ensure you're running the program with sudo:
-```bash
-sudo python3 wifi_scanner.py
-```
-
-2. Check if Wireless Diagnostics is available:
-```bash
-/usr/sbin/wdutil info
-```
-
-3. If you get a "command not found" error, ensure you're running macOS 10.15 or higher.
-
-4. For Linux systems, ensure the `iwlist` command is available:
-```bash
-which iwlist
-```
+The program displays results in a table format with the following columns:
+- SSID: Network name
+- BSSID: MAC address of the access point
+- Signal: Signal strength in dBm
+- Channel: Wi-Fi channel number
+- Freq: Frequency in GHz
+- Security: Encryption type
 
 ## Error Handling
 
-The program includes comprehensive error handling for common issues:
-- Insufficient permissions
-- Missing system utilities
-- Network interface detection failures
-- Parsing errors
+The program includes error handling for:
+- Insufficient permissions (requires sudo/root)
+- Failed network scans
+- Unexpected command output formats
+- Missing system dependencies
+
+## Notes
+
+- On macOS, the program uses the `system_profiler` command to get real-time information about available Wi-Fi networks
+- The scanner can detect networks that are currently in range
+- On Linux, it uses the `iwlist` command from wireless-tools for active scanning
+- The program automatically detects the wireless interface
+- Some networks may not broadcast all information
+- Signal strength is measured in dBm (typically negative values)
+
+## Troubleshooting
+
+### macOS Issues
+- If you're not seeing any networks, make sure your Wi-Fi is turned on
+- The scanner uses system_profiler which requires sudo privileges
+- For more detailed Wi-Fi diagnostics, use the Wireless Diagnostics app:
+  ```bash
+  open -a "Wireless Diagnostics"
+  ```
+
+### Linux Issues
+- Ensure you have the wireless-tools package installed
+- Make sure you're running the script with sudo/root privileges
+- Check that your wireless interface is enabled and not in monitor mode
 
 ## License
 

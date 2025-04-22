@@ -2,388 +2,337 @@
 
 import subprocess
 import re
-import platform
+import sys
 import argparse
 from typing import List, Dict, Optional
-import sys
 import os
 import logging
-import json
 from dataclasses import dataclass
 from enum import Enum
+from scapy.all import *
+from scapy.layers.dot11 import Dot11, Dot11Beacon, Dot11Elt, Dot11WEP
 
 # Set up logging
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    force=True
 )
 logger = logging.getLogger(__name__)
 
+# Remove any existing handlers
+for handler in logger.handlers[:]:
+    logger.removeHandler(handler)
+
+# Add a stream handler with more verbose output
+handler = logging.StreamHandler()
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
 class EncryptionType(Enum):
-    WPA3 = "WPA3"
-    WPA2 = "WPA2"
-    WPA = "WPA"
+    NONE = "Open"
     WEP = "WEP"
-    OPEN = "Open"
+    WPA = "WPA"
+    WPA2 = "WPA2"
+    WPA3 = "WPA3"
+    WPA2_WPA3 = "WPA2/WPA3"
     UNKNOWN = "Unknown"
 
 @dataclass
 class NetworkInfo:
     ssid: str
-    bssid: str
-    signal_strength: int
-    channel: int
-    frequency: float
-    encryption: EncryptionType
+    bssid: Optional[str]
+    signal_strength: Optional[int]
+    channel: Optional[int]
+    frequency: Optional[str]
+    security_type: Optional[str]
+
+    def __str__(self) -> str:
+        return f"{self.ssid:<32} {self.bssid or 'N/A':<17} {self.signal_strength or 'N/A':<8} {self.channel or 'N/A':<8} {self.frequency or 'N/A':<6} {self.security_type or 'N/A'}"
 
 class WiFiScanner:
     def __init__(self):
-        self.os_type = platform.system()
-        logger.info(f"Detected OS: {self.os_type}")
-        self.interface = self._detect_interface()
-        logger.info(f"Using interface: {self.interface}")
-        self.airport_path = self._find_airport_path() if self.os_type == "Darwin" else None
-        if self.os_type == "Darwin":
-            logger.info(f"Using airport utility at: {self.airport_path}")
+        self.logger = logging.getLogger(__name__)
+        self.interface = None
+        self.debug = False
+        self.setup_logging()
+        self._setup_linux()
 
-    def _find_airport_path(self) -> str:
-        """Find the path to the airport utility on macOS."""
-        # Common locations for the airport utility
-        possible_paths = [
-            "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
-            "/usr/local/bin/airport",
-            "/usr/bin/airport"
-        ]
+    def setup_logging(self):
+        """Set up logging configuration."""
+        # Remove any existing handlers to prevent duplication
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
         
-        for path in possible_paths:
-            if os.path.exists(path):
-                logger.info(f"Found airport utility at: {path}")
-                return path
-                
-        logger.warning("Airport utility not found in common locations, searching system...")
-        # If not found in common locations, try to find it using find command
-        try:
-            result = subprocess.run(
-                ["find", "/System", "-name", "airport", "-type", "f", "-perm", "+111"],
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            if result.stdout.strip():
-                path = result.stdout.strip().split('\n')[0]
-                logger.info(f"Found airport utility using find command at: {path}")
-                return path
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Error searching for airport utility: {e}")
-            
-        logger.warning("Could not find airport utility, falling back to command name")
-        return "airport"  # Fallback to just the command name
+        # Configure logging
+        logging.basicConfig(
+            level=logging.DEBUG if self.debug else logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+            force=True
+        )
+        self.logger = logging.getLogger(__name__)
 
     def _detect_interface(self) -> str:
-        """Detect the default wireless interface based on OS."""
-        if self.os_type == "Darwin":  # macOS
-            try:
-                result = subprocess.run(
-                    ["networksetup", "-listallhardwareports"],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                logger.debug(f"Hardware ports output:\n{result.stdout}")
-                # Look for Wi-Fi interface in the output
-                for line in result.stdout.split('\n'):
-                    if "Wi-Fi" in line:
-                        # Next line should contain the interface name
-                        next_line = result.stdout.split('\n')[result.stdout.split('\n').index(line) + 1]
-                        interface = next_line.split()[-1]
-                        logger.info(f"Found Wi-Fi interface: {interface}")
-                        return interface
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Error detecting interface: {e}")
-            logger.warning("Using default macOS interface: en0")
-            return "en0"  # Default macOS Wi-Fi interface
-        else:  # Linux
-            try:
-                result = subprocess.run(
-                    ["iw", "dev"],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                # Extract the first wireless interface name
-                match = re.search(r"Interface\s+(\w+)", result.stdout)
-                if match:
-                    interface = match.group(1)
+        """Detect the default wireless interface on Linux."""
+        try:
+            # Try iw command first
+            result = subprocess.run(
+                ["iw", "dev"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # Extract the first wireless interface name
+            match = re.search(r"Interface\s+(\w+)", result.stdout)
+            if match:
+                interface = match.group(1)
+                logger.info(f"Found Wi-Fi interface: {interface}")
+                return interface
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            logger.error(f"Error detecting interface with iw: {e}")
+        
+        try:
+            # Try nmcli as fallback
+            result = subprocess.run(
+                ["nmcli", "device", "show"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # Look for wireless devices
+            for line in result.stdout.split('\n'):
+                if "wifi" in line.lower() and "device" in line.lower():
+                    interface = line.split(':')[1].strip()
                     logger.info(f"Found Wi-Fi interface: {interface}")
                     return interface
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Error detecting interface: {e}")
-            logger.warning("Using default Linux interface: wlan0")
-            return "wlan0"  # Default Linux Wi-Fi interface
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            logger.error(f"Error detecting interface with nmcli: {e}")
+        
+        try:
+            # Try ip command as last resort
+            result = subprocess.run(
+                ["ip", "link", "show"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # Look for wireless interfaces (usually start with wl)
+            for line in result.stdout.split('\n'):
+                if "wl" in line and "@" not in line:
+                    interface = line.split(':')[1].strip()
+                    logger.info(f"Found Wi-Fi interface: {interface}")
+                    return interface
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            logger.error(f"Error detecting interface with ip: {e}")
+        
+        logger.warning("Using default Linux interface: wlan0")
+        return "wlan0"  # Default Linux Wi-Fi interface
 
     def _check_permissions(self) -> bool:
         """Check if we have necessary permissions to scan networks."""
-        if self.os_type == "Darwin":  # macOS
-            try:
-                # Try networksetup
-                result = subprocess.run(
-                    ["networksetup", "-listpreferredwirelessnetworks", self.interface],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                return True
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Error accessing networksetup: {e}")
-                return False
-        else:  # Linux
-            try:
-                result = subprocess.run(
-                    ["iwlist", "scanning"],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                return True
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Error accessing iwlist: {e}")
-                return False
+        try:
+            # Try nmcli first
+            result = subprocess.run(
+                ["nmcli", "device", "wifi", "list"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            logger.error(f"Error accessing nmcli: {e}")
+            return False
 
-    def _parse_macos_output(self, output: str) -> List[NetworkInfo]:
-        """Parse the output of system_profiler command on macOS."""
+    def _parse_nmcli_output(self, output: str) -> List[NetworkInfo]:
+        """Parse the output of nmcli command."""
         networks = []
-        current_network = None
-        in_wifi_section = False
-        in_networks_section = False
         
-        logger.debug("Starting to parse system_profiler output")
-        logger.debug(f"Raw output:\n{output}")
+        logger.debug(f"Raw nmcli output:\n{output}")
         
-        # Process each line
         for line in output.split('\n'):
-            line_content = line.rstrip()
-            if not line_content:
+            if not line.strip():
                 continue
-            
-            # Check if we're in the Wi-Fi section
-            if "Wi-Fi:" in line_content:
-                in_wifi_section = True
-                continue
-            
-            if not in_wifi_section:
-                continue
-            
-            # Check if we're in the Local Wi-Fi Networks section
-            if "Local Wi-Fi Networks:" in line_content:
-                in_networks_section = True
-                continue
-            
-            if not in_networks_section:
-                continue
-            
-            # Get the indentation level
-            indent = len(line_content) - len(line_content.lstrip())
-            
-            # Network SSID (12 spaces indentation)
-            if indent == 12 and line_content.endswith(':'):
-                if current_network:
-                    networks.append(NetworkInfo(
-                        ssid=current_network['ssid'],
-                        bssid=current_network['bssid'],
-                        signal_strength=current_network['signal'],
-                        channel=current_network['channel'],
-                        frequency=current_network['frequency'],
-                        encryption=current_network['encryption']
-                    ))
                 
-                current_network = {
-                    'ssid': line_content[12:-1],  # Remove indentation and colon
-                    'bssid': 'Unknown',
-                    'signal': -100,
-                    'channel': 1,
-                    'frequency': 2.4,
-                    'encryption': EncryptionType.UNKNOWN
-                }
-                logger.debug(f"Found network: {current_network['ssid']}")
-            
-            # Network properties (14 spaces indentation)
-            elif indent == 14 and current_network:
-                if "PHY Mode:" in line_content:
-                    phy_mode = line_content.split("PHY Mode:")[1].strip()
-                    if any(x in phy_mode for x in ['802.11a', '802.11ac', '802.11ax']):
-                        current_network['frequency'] = 5.0
-                elif "Channel:" in line_content:
-                    try:
-                        channel_info = line_content.split("Channel:")[1].strip()
-                        channel = int(channel_info.split()[0])
-                        current_network['channel'] = channel
-                        if '5GHz' in channel_info:
-                            current_network['frequency'] = 5.0
-                        elif channel > 14:
-                            current_network['frequency'] = 5.0
-                    except (ValueError, IndexError):
-                        pass
-                elif "Security:" in line_content:
-                    security = line_content.split("Security:")[1].strip()
-                    if security == "None":
-                        current_network['encryption'] = EncryptionType.OPEN
-                    elif "WPA3" in security:
-                        current_network['encryption'] = EncryptionType.WPA3
-                    elif "WPA2" in security:
-                        current_network['encryption'] = EncryptionType.WPA2
-                    elif "WPA" in security:
-                        current_network['encryption'] = EncryptionType.WPA
-                    elif "WEP" in security:
-                        current_network['encryption'] = EncryptionType.WEP
-            
-            # End of Wi-Fi section
-            elif indent == 0 and line_content.endswith(':'):
-                in_wifi_section = False
-                in_networks_section = False
-        
-        # Add the last network if exists
-        if current_network:
-            networks.append(NetworkInfo(
-                ssid=current_network['ssid'],
-                bssid=current_network['bssid'],
-                signal_strength=current_network['signal'],
-                channel=current_network['channel'],
-                frequency=current_network['frequency'],
-                encryption=current_network['encryption']
-            ))
-        
-        logger.info(f"Finished parsing, found {len(networks)} networks")
-        return networks
-
-    def _parse_linux_output(self, output: str) -> List[NetworkInfo]:
-        """Parse the output of Linux iwlist command."""
-        networks = []
-        current_network = {}
-        
-        logger.debug(f"Raw iwlist output:\n{output}")
-        
-        for line in output.split('\n'):
-            line = line.strip()
-            
-            # New network entry
-            if "Cell" in line:
-                if current_network:
-                    try:
-                        networks.append(NetworkInfo(
-                            ssid=current_network.get('ssid', ''),
-                            bssid=current_network.get('bssid', ''),
-                            signal_strength=int(current_network.get('signal', -100)),
-                            channel=int(current_network.get('channel', 1)),
-                            frequency=float(current_network.get('frequency', 2.4)),
-                            encryption=current_network.get('encryption', EncryptionType.UNKNOWN)
-                        ))
-                    except (ValueError, KeyError) as e:
-                        logger.error(f"Error creating NetworkInfo: {e}")
-                        pass
-                current_network = {}
-            
-            # Extract network information
             try:
-                if "ESSID" in line:
-                    current_network['ssid'] = re.search(r'ESSID:"([^"]*)"', line).group(1)
-                elif "Address" in line:
-                    current_network['bssid'] = line.split("Address: ")[1]
-                elif "Signal level" in line:
-                    current_network['signal'] = re.search(r'Signal level=(-?\d+)', line).group(1)
-                elif "Channel" in line:
-                    current_network['channel'] = re.search(r'Channel (\d+)', line).group(1)
-                elif "Frequency" in line:
-                    current_network['frequency'] = float(re.search(r'(\d+\.\d+)', line).group(1))
-                elif "IE: IEEE 802.11i" in line:
-                    if "WPA3" in line:
-                        current_network['encryption'] = EncryptionType.WPA3
-                    elif "WPA2" in line:
-                        current_network['encryption'] = EncryptionType.WPA2
-                    elif "WPA" in line:
-                        current_network['encryption'] = EncryptionType.WPA
-                elif "WEP" in line:
-                    current_network['encryption'] = EncryptionType.WEP
-                elif "key:off" in line:
-                    current_network['encryption'] = EncryptionType.OPEN
+                # Parse the tab-separated values
+                fields = line.split(':')
+                if len(fields) >= 6:
+                    ssid = fields[0]
+                    bssid = fields[1]
+                    channel = int(fields[2])
+                    rate = fields[3]
+                    signal = int(fields[4])
+                    security = fields[5]
+                    
+                    # Determine frequency based on channel
+                    frequency = '2.4'
+                    if channel > 14:
+                        frequency = '5'
+                    
+                    # Create network info
+                    network = NetworkInfo(
+                        ssid=ssid,
+                        bssid=bssid,
+                        signal_strength=signal,
+                        channel=channel,
+                        frequency=frequency,
+                        security_type=security or EncryptionType.NONE.value
+                    )
+                    networks.append(network)
+                    logger.debug(f"Found network: {ssid} ({bssid})")
             except Exception as e:
                 logger.error(f"Error parsing line '{line}': {e}")
+                continue
         
-        # Add the last network if exists
-        if current_network:
-            try:
-                networks.append(NetworkInfo(
-                    ssid=current_network.get('ssid', ''),
-                    bssid=current_network.get('bssid', ''),
-                    signal_strength=int(current_network.get('signal', -100)),
-                    channel=int(current_network.get('channel', 1)),
-                    frequency=float(current_network.get('frequency', 2.4)),
-                    encryption=current_network.get('encryption', EncryptionType.UNKNOWN)
-                ))
-            except (ValueError, KeyError) as e:
-                logger.error(f"Error creating NetworkInfo: {e}")
-                pass
-        
-        logger.info(f"Found {len(networks)} networks")
         return networks
+
+    def _scan_with_scapy(self) -> List[NetworkInfo]:
+        """Scan for Wi-Fi networks using scapy."""
+        networks = []
+        seen_networks = set()
+
+        def packet_handler(pkt):
+            if pkt.haslayer(Dot11Beacon):
+                # Extract BSSID
+                bssid = pkt[Dot11].addr2
+                
+                # Extract SSID
+                ssid = None
+                for element in pkt[Dot11Elt:]:
+                    if element.ID == 0:  # SSID element
+                        ssid = element.info.decode()
+                        break
+                
+                if not ssid or ssid in seen_networks:
+                    return
+                
+                seen_networks.add(ssid)
+                
+                # Extract channel
+                channel = None
+                for element in pkt[Dot11Elt:]:
+                    if element.ID == 3:  # DS Parameter Set element
+                        channel = ord(element.info)
+                        break
+                
+                # Determine frequency based on channel
+                frequency = '2.4'
+                if channel and channel > 14:
+                    frequency = '5'
+                
+                # Determine encryption type
+                security_type = EncryptionType.UNKNOWN.value
+                if pkt.haslayer(Dot11WEP):
+                    security_type = EncryptionType.WEP.value
+                else:
+                    # Check for WPA/WPA2/WPA3
+                    rsn = None
+                    for element in pkt[Dot11Elt:]:
+                        if element.ID == 48:  # RSN element
+                            rsn = element
+                            break
+                    
+                    if rsn:
+                        # Parse RSN capabilities
+                        if len(rsn.info) > 2:
+                            version = rsn.info[0]
+                            if version == 3:
+                                security_type = EncryptionType.WPA3.value
+                            elif version == 2:
+                                security_type = EncryptionType.WPA2.value
+                            elif version == 1:
+                                security_type = EncryptionType.WPA.value
+                
+                # Create network info
+                network = NetworkInfo(
+                    ssid=ssid,
+                    bssid=bssid,
+                    signal_strength=-100,  # Default value
+                    channel=channel or 1,
+                    frequency=frequency,
+                    security_type=security_type
+                )
+                networks.append(network)
+                logger.debug(f"Found network: {ssid} ({bssid})")
+
+        try:
+            # Start sniffing for 5 seconds
+            logger.info("Starting Wi-Fi scan with scapy...")
+            sniff(iface=self.interface, prn=packet_handler, timeout=5, store=0)
+            logger.info(f"Found {len(networks)} networks using scapy")
+            return networks
+        except Exception as e:
+            logger.error(f"Error scanning with scapy: {e}")
+            return []
 
     def scan_networks(self) -> List[NetworkInfo]:
         """Scan for available Wi-Fi networks."""
-        if not self._check_permissions():
-            logger.error("Insufficient permissions to scan networks")
-            return []
-
+        logger.debug("Starting network scan")
+        
         try:
-            if self.os_type == "Darwin":  # macOS
-                logger.info("Scanning networks using system_profiler...")
-                result = subprocess.run(
-                    ["system_profiler", "SPAirPortDataType"],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                return self._parse_macos_output(result.stdout)
-            else:  # Linux
-                logger.info("Scanning networks using iwlist...")
-                result = subprocess.run(
-                    ["iwlist", self.interface, "scan"],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                return self._parse_linux_output(result.stdout)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Error scanning networks: {e}")
-            return []
+            # Try nmcli first
+            cmd = ["nmcli", "-t", "-f", "SSID,BSSID,CHAN,RATE,SIGNAL,SECURITY", "device", "wifi", "list"]
+            logger.debug(f"Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logger.debug("Parsing nmcli output")
+                networks = self._parse_nmcli_output(result.stdout)
+                if networks:
+                    logger.info(f"Found {len(networks)} networks using nmcli")
+                    return networks
+            
+            # If nmcli fails or finds no networks, try with scapy
+            logger.warning("No networks found with nmcli, trying scapy...")
+            return self._scan_with_scapy()
+                
+        except Exception as e:
+            logger.error(f"Error scanning networks: {str(e)}")
+            # Try with scapy as fallback
+            return self._scan_with_scapy()
 
-def display_networks(networks: List[NetworkInfo], encryption_filter: Optional[EncryptionType] = None):
-    """Display networks in a formatted table."""
-    # Filter networks if encryption type is specified
+    def _setup_linux(self):
+        """Set up the scanner for Linux systems."""
+        self.interface = self._detect_interface()
+        logger.info(f"Using interface: {self.interface}")
+            
+        if not self._check_permissions():
+            raise PermissionError("Insufficient permissions to scan networks. Try running with sudo.")
+
+def display_networks(networks: List[NetworkInfo], encryption_filter: Optional[str] = None) -> None:
+    """Display the list of networks in a formatted table."""
     if encryption_filter:
-        networks = [n for n in networks if n.encryption == encryption_filter]
-    
-    if not networks:
-        logger.warning("No networks found matching the criteria.")
-        return
+        networks = [n for n in networks if n.security_type.lower() == encryption_filter.lower()]
+
+    # Sort by signal strength (None values last) then by SSID
+    networks.sort(key=lambda x: (x.signal_strength if x.signal_strength is not None else -1000, x.ssid))
 
     # Print header
-    print("\n{:<32} {:<17} {:<8} {:<8} {:<8} {:<8}".format(
-        "SSID", "BSSID", "Signal", "Channel", "Freq", "Security"
-    ))
+    print(f"{'SSID':<32} {'BSSID':<17} {'Signal':<8} {'Channel':<8} {'Freq':<6} {'Security'}")
     print("-" * 85)
 
-    # Print network information
+    # Print each network
     for network in networks:
-        print("{:<32} {:<17} {:<8} {:<8} {:<8.1f} {:<8}".format(
-            network.ssid[:32],
-            network.bssid,
-            f"{network.signal_strength} dBm",
-            network.channel,
-            network.frequency,
-            network.encryption.value
-        ))
+        ssid = network.ssid[:32]  # Truncate SSID if too long
+        bssid = network.bssid if network.bssid else "N/A"
+        signal = f"{network.signal_strength} dBm" if network.signal_strength is not None else "N/A"
+        channel = str(network.channel) if network.channel else "N/A"
+        freq = f"{network.frequency}" if network.frequency else "N/A"
+        security = network.security_type if network.security_type else "NONE"
+
+        print(f"{ssid:<32} {bssid:<17} {signal:<8} {channel:<8} {freq:<6} {security}")
+
+    print(f"\nTotal networks found: {len(networks)}")
+
+def check_sudo():
+    """Check if the script is running with sudo privileges."""
+    return os.geteuid() == 0
 
 def main():
-    parser = argparse.ArgumentParser(description="Wi-Fi Network Scanner")
+    parser = argparse.ArgumentParser(description="Linux Wi-Fi Network Scanner")
     parser.add_argument(
         "--filter",
         choices=[e.value for e in EncryptionType],
@@ -394,6 +343,11 @@ def main():
         action="store_true",
         help="Enable debug logging"
     )
+    parser.add_argument(
+        "--interface",
+        "-i",
+        help="Specify the wireless interface to use"
+    )
     args = parser.parse_args()
 
     if args.debug:
@@ -401,12 +355,22 @@ def main():
     else:
         logger.setLevel(logging.INFO)
 
+    # Check for sudo privileges
+    if not check_sudo():
+        logger.error("This script requires sudo privileges to scan networks.")
+        logger.error("Please run with: sudo python3 wifi_scanner.py")
+        sys.exit(1)
+
     scanner = WiFiScanner()
+    if args.interface:
+        scanner.interface = args.interface
+        logger.info(f"Using specified interface: {scanner.interface}")
+    
     networks = scanner.scan_networks()
     
     encryption_filter = None
     if args.filter:
-        encryption_filter = EncryptionType(args.filter)
+        encryption_filter = args.filter
     
     display_networks(networks, encryption_filter)
 

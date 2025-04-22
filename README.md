@@ -5,6 +5,7 @@ A Python-based Wi-Fi network scanner that works on both macOS and Linux systems.
 ## Features
 
 - Automatic OS detection (macOS/Linux)
+- Native CoreWLAN integration for macOS
 - Dynamic wireless interface detection
 - Detailed network information display
 - Filtering by encryption type
@@ -15,8 +16,8 @@ A Python-based Wi-Fi network scanner that works on both macOS and Linux systems.
 
 ### macOS
 - Python 3.6 or higher
-- `system_profiler` command (built into macOS) - primary scanning method
-- Note: The scanner uses system_profiler to get real-time information about available Wi-Fi networks
+- pyobjc-framework-CoreWLAN (for native Wi-Fi scanning)
+- scapy (for advanced network analysis)
 
 ### Linux
 - Python 3.6 or higher
@@ -31,7 +32,12 @@ git clone <repository-url>
 cd wifi-scanner
 ```
 
-2. Make the script executable:
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Make the script executable:
 ```bash
 chmod +x wifi_scanner.py
 ```
@@ -79,28 +85,44 @@ The program displays results in a table format with the following columns:
 - Freq: Frequency in GHz
 - Security: Encryption type
 
+## Implementation Details
+
+### macOS
+The scanner uses Apple's CoreWLAN framework through PyObjC bindings to:
+- Access Wi-Fi interface information
+- Perform native network scanning
+- Get detailed network information including:
+  - SSID and BSSID
+  - Signal strength (RSSI)
+  - Channel and frequency
+  - Security type (WPA/WPA2/WPA3)
+
+### Linux
+On Linux systems, the scanner uses:
+- `iwlist` for network scanning
+- `iw` for interface detection
+- Direct hardware access for advanced features
+
 ## Error Handling
 
 The program includes error handling for:
 - Insufficient permissions (requires sudo/root)
 - Failed network scans
-- Unexpected command output formats
 - Missing system dependencies
+- Interface detection issues
 
 ## Notes
 
-- On macOS, the program uses the `system_profiler` command to get real-time information about available Wi-Fi networks
+- On macOS, the program uses the native CoreWLAN framework for optimal performance
 - The scanner can detect networks that are currently in range
-- On Linux, it uses the `iwlist` command from wireless-tools for active scanning
-- The program automatically detects the wireless interface
-- Some networks may not broadcast all information
 - Signal strength is measured in dBm (typically negative values)
+- Some networks may not broadcast all information
 
 ## Troubleshooting
 
 ### macOS Issues
-- If you're not seeing any networks, make sure your Wi-Fi is turned on
-- The scanner uses system_profiler which requires sudo privileges
+- Make sure your Wi-Fi is turned on
+- Verify that the CoreWLAN framework is accessible
 - For more detailed Wi-Fi diagnostics, use the Wireless Diagnostics app:
   ```bash
   open -a "Wireless Diagnostics"

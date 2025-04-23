@@ -315,9 +315,6 @@ class WiFiScanner:
 
 def display_networks(networks: List[NetworkInfo], encryption_filter: Optional[str] = None) -> None:
     """Display the list of networks in a formatted table."""
-    # Filter out networks with blank SSIDs
-    networks = [n for n in networks if n.ssid.strip()]
-    
     if encryption_filter:
         networks = [n for n in networks if n.security_type.lower() == encryption_filter.lower()]
 
@@ -332,7 +329,7 @@ def display_networks(networks: List[NetworkInfo], encryption_filter: Optional[st
     for network in networks:
         # Handle special characters in SSID by using unicode normalization
         import unicodedata
-        ssid = unicodedata.normalize('NFKC', network.ssid)[:32]  # Truncate SSID if too long
+        ssid = unicodedata.normalize('NFKC', network.ssid)[:32] if network.ssid.strip() else "[NO SSID]"
         bssid = network.bssid if network.bssid else "N/A"
         signal = f"{network.signal_strength} dBm" if network.signal_strength is not None else "N/A"
         channel = str(network.channel) if network.channel else "N/A"

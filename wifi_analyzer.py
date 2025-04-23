@@ -164,6 +164,10 @@ def analyze_channel_congestion(networks: List[NetworkInfo]) -> Dict[str, BandAna
                 channel = get_5ghz_channel(network.frequency)
                 if channel is not None:
                     used_channels.add(channel)
+                    logger.debug(f"Found 5 GHz network on channel {channel}: {network.ssid}")
+            
+            logger.debug(f"Total unique 5 GHz channels found: {len(used_channels)}")
+            logger.debug(f"5 GHz channels: {sorted(used_channels)}")
             
             # Analyze each used channel
             for channel in sorted(used_channels):
@@ -172,10 +176,17 @@ def analyze_channel_congestion(networks: List[NetworkInfo]) -> Dict[str, BandAna
                 channel_networks = [n for n in band_nets 
                                   if get_5ghz_channel(n.frequency) in overlapping_channels]
                 
+                logger.debug(f"Analyzing channel {channel}:")
+                logger.debug(f"  - Overlapping channels: {overlapping_channels}")
+                logger.debug(f"  - Networks on this channel: {len(channel_networks)}")
+                
                 if channel_networks:
                     signals = [n.signal_strength for n in channel_networks if n.signal_strength is not None]
                     avg_signal = np.mean(signals) if signals else -100
                     congestion_score = len(channel_networks) * (1 + (avg_signal / 100))
+                    
+                    logger.debug(f"  - Average signal: {avg_signal:.1f} dBm")
+                    logger.debug(f"  - Congestion score: {congestion_score:.2f}")
                     
                     is_dfs = is_dfs_channel(channel)
                     recommendation = (

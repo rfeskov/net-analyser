@@ -87,22 +87,10 @@ def get_5ghz_channel(frequency: str) -> Optional[int]:
         freq = int(frequency)
         logger.debug(f"Converted to integer: {freq}")
         
-        # Convert frequency to channel number
-        if 5180 <= freq <= 5320:  # UNII-1 and UNII-2A
-            channel = (freq - 5180) // 20 + 36
-            logger.debug(f"UNII-1/2A channel: {channel}")
-            return channel
-        elif 5320 < freq <= 5500:  # UNII-2A (Extended)
-            channel = (freq - 5320) // 20 + 64
-            logger.debug(f"UNII-2A Extended channel: {channel}")
-            return channel
-        elif 5500 <= freq <= 5700:  # UNII-2C
-            channel = (freq - 5500) // 20 + 100
-            logger.debug(f"UNII-2C channel: {channel}")
-            return channel
-        elif 5745 <= freq <= 5825:  # UNII-3
-            channel = (freq - 5745) // 20 + 149
-            logger.debug(f"UNII-3 channel: {channel}")
+        # Look up channel in our dictionary
+        if freq in FREQ_TO_CHANNEL:
+            channel = FREQ_TO_CHANNEL[freq]
+            logger.debug(f"Found channel {channel} for frequency {freq}")
             return channel
         else:
             logger.warning(f"Unknown 5 GHz frequency: {freq} MHz")

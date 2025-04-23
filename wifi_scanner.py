@@ -157,15 +157,26 @@ class WiFiScanner:
                 continue
                 
             try:
-                # Parse the tab-separated values
-                fields = line.split(':')
-                if len(fields) >= 6:
-                    ssid = fields[0]
-                    bssid = fields[1]
-                    channel = int(fields[2])
-                    rate = fields[3]
-                    signal = int(fields[4])
-                    security = fields[5]
+                # Split the line into parts, handling escaped colons in MAC addresses
+                parts = []
+                current_part = []
+                i = 0
+                while i < len(line):
+                    if line[i] == ':' and (i == 0 or line[i-1] != '\\'):
+                        parts.append(''.join(current_part))
+                        current_part = []
+                    else:
+                        current_part.append(line[i])
+                    i += 1
+                parts.append(''.join(current_part))
+                
+                if len(parts) >= 6:
+                    ssid = parts[0]
+                    bssid = parts[1].replace('\\:', ':')  # Unescape colons in MAC address
+                    channel = int(parts[2])
+                    rate = parts[3]
+                    signal = int(parts[4])
+                    security = parts[5]
                     
                     # Determine frequency based on channel
                     frequency = '2.4'

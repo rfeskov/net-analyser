@@ -101,6 +101,18 @@ def get_5ghz_overlapping_channels(channel: int, width: int = 20) -> List[int]:
     
     return list(FREQ_TO_CHANNEL.values())[start_idx:end_idx]
 
+def get_overlapping_channels(channel: int) -> List[int]:
+    """Get list of channels that overlap with the given 2.4 GHz channel."""
+    # In 2.4 GHz, each channel is 5 MHz wide but requires 20 MHz bandwidth
+    # Channels overlap with adjacent channels
+    if channel == 1:
+        return [1, 2, 3, 4, 5]
+    elif channel == 6:
+        return [4, 5, 6, 7, 8]
+    elif channel == 11:
+        return [9, 10, 11, 12, 13]
+    return [channel]
+
 def analyze_channel_congestion(networks: List[NetworkInfo]) -> Dict[str, BandAnalysis]:
     """Analyze channel congestion in both 2.4 GHz and 5 GHz bands."""
     analysis = {}

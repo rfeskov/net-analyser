@@ -80,15 +80,23 @@ class AnalysisResult:
 def get_5ghz_channel(frequency: str) -> Optional[int]:
     """Convert frequency in MHz to 5 GHz channel number."""
     try:
+        logger.debug(f"Converting frequency: {frequency}")
         # Remove '5' prefix and convert to integer
         freq = int(frequency.replace('5', ''))
+        logger.debug(f"Converted to integer: {freq}")
         # Convert frequency to channel number
         if 5180 <= freq <= 5320:  # UNII-1 and UNII-2A
-            return (freq - 5180) // 20 + 36
+            channel = (freq - 5180) // 20 + 36
+            logger.debug(f"UNII-1/2A channel: {channel}")
+            return channel
         elif 5500 <= freq <= 5700:  # UNII-2C
-            return (freq - 5500) // 20 + 100
+            channel = (freq - 5500) // 20 + 100
+            logger.debug(f"UNII-2C channel: {channel}")
+            return channel
         elif 5745 <= freq <= 5825:  # UNII-3
-            return (freq - 5745) // 20 + 149
+            channel = (freq - 5745) // 20 + 149
+            logger.debug(f"UNII-3 channel: {channel}")
+            return channel
         else:
             logger.warning(f"Unknown 5 GHz frequency: {freq} MHz")
             return None
@@ -131,8 +139,11 @@ def analyze_channel_congestion(networks: List[NetworkInfo]) -> Dict[str, BandAna
     # Group networks by frequency band
     band_networks = {
         '2.4': [n for n in networks if n.frequency == '2.4'],
-        '5': [n for n in networks if n.frequency == '5']
+        '5': [n for n in networks if n.frequency != '2.4']  # Changed this line
     }
+    
+    logger.debug(f"2.4 GHz networks: {len(band_networks['2.4'])}")
+    logger.debug(f"5 GHz networks: {len(band_networks['5'])}")
     
     for band, band_nets in band_networks.items():
         if not band_nets:
@@ -172,6 +183,7 @@ def analyze_channel_congestion(networks: List[NetworkInfo]) -> Dict[str, BandAna
             
             # First, collect all used channels
             for network in band_nets:
+                logger.debug(f"Processing 5 GHz network: {network.ssid}, frequency: {network.frequency}, channel: {network.channel}")
                 channel = get_5ghz_channel(network.frequency)
                 if channel is not None:
                     used_channels.add(channel)

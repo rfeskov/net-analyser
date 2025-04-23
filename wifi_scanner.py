@@ -181,7 +181,15 @@ class WiFiScanner:
                     # Determine frequency based on channel
                     frequency = '2.4'
                     if channel > 14:
-                        frequency = '5'
+                        # Convert channel to frequency in MHz
+                        if 36 <= channel <= 64:  # UNII-1 and UNII-2A
+                            frequency = str(5180 + (channel - 36) * 20)
+                        elif 100 <= channel <= 140:  # UNII-2C
+                            frequency = str(5500 + (channel - 100) * 20)
+                        elif 149 <= channel <= 165:  # UNII-3
+                            frequency = str(5745 + (channel - 149) * 20)
+                        else:
+                            frequency = '5'  # Fallback to just '5' if channel is unknown
                     
                     # Create network info
                     network = NetworkInfo(

@@ -260,57 +260,39 @@ def generate_recommendations(analysis: AnalysisResult) -> List[str]:
     # Band recommendations
     if analysis.band_analysis:
         for band, band_data in analysis.band_analysis.items():
-            recommendations.append(f"{Fore.CYAN}{band} GHz Band Analysis:{Style.RESET_ALL}")
-            recommendations.append(f"Total networks: {band_data.total_networks}")
-            recommendations.append(f"Average congestion: {band_data.congestion_score:.2f}")
-            recommendations.append(f"Recommendation: {band_data.recommendation}")
-            recommendations.append("")
+            if band_data.congestion_score > 4:
+                recommendations.append(
+                    f"Consider using {'5 GHz' if band == '2.4' else '2.4 GHz'} "
+                    f"band due to high congestion (score: {band_data.congestion_score:.2f})"
+                )
             
+            # Find best channel in the band
             if band_data.channels:
-                recommendations.append(f"{'Channel':<8} {'Networks':<10} {'Avg Signal':<12} {'Congestion':<12} {'DFS':<5} {'Recommendation'}")
-                recommendations.append("-" * 70)
-                
-                for channel, data in band_data.channels.items():
-                    # Color coding
-                    if data.is_dfs:
-                        channel_color = Fore.YELLOW
-                    elif data.congestion_score > 5:
-                        channel_color = Fore.RED
-                    elif data.congestion_score > 3:
-                        channel_color = Fore.YELLOW
-                    else:
-                        channel_color = Fore.GREEN
-                    
-                    recommendations.append(f"{channel_color}{channel:<8}{Style.RESET_ALL} {len(data.networks):<10} "
-                                          f"{data.signal_strength_avg:.1f} dBm{'':<4} "
-                                          f"{data.congestion_score:.2f}{'':<12} "
-                                          f"{'Yes' if data.is_dfs else 'No':<5} "
-                                          f"{data.recommendation}")
-            recommendations.append("")
+                best_channel = min(band_data.channels.values(), 
+                                 key=lambda x: x.congestion_score)
+                recommendations.append(
+                    f"Best channel in {band} GHz band: {best_channel.channel} "
+                    f"(congestion score: {best_channel.congestion_score:.2f})"
+                )
+                if best_channel.is_dfs:
+                    recommendations.append(
+                        f"Note: Channel {best_channel.channel} is a DFS channel "
+                        "and requires radar detection"
+                    )
     
     # Security recommendations
     if analysis.security_issues:
-        recommendations.append(f"{Fore.RED}Security Issues:{Style.RESET_ALL}")
-        for issue in analysis.security_issues:
-            recommendations.append(f"\nNetwork: {issue.network.ssid} ({issue.network.bssid})")
-            for i, problem in enumerate(issue.issues):
-                recommendations.append(f"  {Fore.RED}•{Style.RESET_ALL} {problem}")
-                recommendations.append(f"  {Fore.GREEN}→{Style.RESET_ALL} {issue.recommendations[i]}")
-        recommendations.append("")
+        recommendations.append(
+            f"Found {len(analysis.security_issues)} networks with security issues. "
+            "Consider upgrading to WPA2/WPA3 encryption."
+        )
     
     # Signal strength recommendations
     if analysis.weak_signals:
-        recommendations.append(f"{Fore.YELLOW}Weak Signals:{Style.RESET_ALL}")
-        for network in analysis.weak_signals:
-            recommendations.append(f"  • {network.ssid} ({network.bssid}): {network.signal_strength} dBm")
-        recommendations.append("")
-    
-    # Overall recommendations
-    if analysis.recommendations:
-        recommendations.append(f"{Fore.CYAN}Overall Recommendations:{Style.RESET_ALL}")
-        for rec in analysis.recommendations:
-            recommendations.append(f"  • {rec}")
-        recommendations.append("")
+        recommendations.append(
+            f"Found {len(analysis.weak_signals)} networks with weak signal strength "
+            "(below -70 dBm). Consider adjusting antenna position or using a signal booster."
+        )
     
     return recommendations
 

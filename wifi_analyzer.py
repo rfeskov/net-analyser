@@ -155,14 +155,18 @@ def analyze_channel_congestion(networks: List[NetworkInfo]) -> Dict[str, BandAna
                         recommendation=recommendation
                     )
         else:
-            # New 5 GHz analysis
+            # 5 GHz analysis
             channel_analysis = {}
+            used_channels = set()
             
+            # First, collect all used channels
             for network in band_nets:
                 channel = get_5ghz_channel(network.frequency)
-                if channel is None:
-                    continue
-                    
+                if channel is not None:
+                    used_channels.add(channel)
+            
+            # Analyze each used channel
+            for channel in sorted(used_channels):
                 # Get overlapping channels based on assumed width (default 20 MHz)
                 overlapping_channels = get_5ghz_overlapping_channels(channel)
                 channel_networks = [n for n in band_nets 

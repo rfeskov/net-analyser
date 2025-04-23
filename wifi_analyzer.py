@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 FREQ_TO_CHANNEL = {
     5180: 36, 5200: 40, 5220: 44, 5240: 48,  # UNII-1
     5260: 52, 5280: 56, 5300: 60, 5320: 64,  # UNII-2A (DFS)
+    5340: 68, 5360: 72, 5380: 76, 5400: 80,  # UNII-2A Extended
+    5420: 84, 5440: 88, 5460: 92, 5480: 96,  # UNII-2A Extended
     5500: 100, 5520: 104, 5540: 108, 5560: 112,  # UNII-2C (DFS)
     5580: 116, 5600: 120, 5620: 124, 5640: 128,  # UNII-2C (DFS)
     5660: 132, 5680: 136, 5700: 140,  # UNII-2C (DFS)
@@ -118,12 +120,22 @@ def get_5ghz_overlapping_channels(channel: int, width: int = 20) -> List[int]:
     if width not in CHANNEL_WIDTHS:
         return [channel]
     
-    num_channels = CHANNEL_WIDTHS[width]
-    center_idx = list(FREQ_TO_CHANNEL.values()).index(channel)
-    start_idx = max(0, center_idx - (num_channels // 2))
-    end_idx = min(len(FREQ_TO_CHANNEL), center_idx + (num_channels // 2) + 1)
+    # Get all valid channels
+    valid_channels = sorted(FREQ_TO_CHANNEL.values())
     
-    return list(FREQ_TO_CHANNEL.values())[start_idx:end_idx]
+    # Find the index of the channel in the list
+    try:
+        center_idx = valid_channels.index(channel)
+    except ValueError:
+        logger.warning(f"Channel {channel} not found in valid channels list")
+        return [channel]
+    
+    # Calculate the range of channels to include based on width
+    num_channels = CHANNEL_WIDTHS[width]
+    start_idx = max(0, center_idx - (num_channels // 2))
+    end_idx = min(len(valid_channels), center_idx + (num_channels // 2) + 1)
+    
+    return valid_channels[start_idx:end_idx]
 
 def get_overlapping_channels(channel: int) -> List[int]:
     """Get list of channels that overlap with the given 2.4 GHz channel."""

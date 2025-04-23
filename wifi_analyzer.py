@@ -80,9 +80,20 @@ class AnalysisResult:
 def get_5ghz_channel(frequency: str) -> Optional[int]:
     """Convert frequency in MHz to 5 GHz channel number."""
     try:
+        # Remove '5' prefix and convert to integer
         freq = int(frequency.replace('5', ''))
-        return FREQ_TO_CHANNEL.get(freq)
-    except (ValueError, AttributeError):
+        # Convert frequency to channel number
+        if 5180 <= freq <= 5320:  # UNII-1 and UNII-2A
+            return (freq - 5180) // 20 + 36
+        elif 5500 <= freq <= 5700:  # UNII-2C
+            return (freq - 5500) // 20 + 100
+        elif 5745 <= freq <= 5825:  # UNII-3
+            return (freq - 5745) // 20 + 149
+        else:
+            logger.warning(f"Unknown 5 GHz frequency: {freq} MHz")
+            return None
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Error converting frequency {frequency} to channel: {e}")
         return None
 
 def is_dfs_channel(channel: int) -> bool:

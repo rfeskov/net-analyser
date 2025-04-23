@@ -302,26 +302,57 @@ def generate_recommendations(analysis: AnalysisResult) -> List[str]:
     
     # Band recommendations
     if analysis.band_analysis:
+        # Get congestion scores for both bands
+        band_scores = {
+            band: band_data.congestion_score 
+            for band, band_data in analysis.band_analysis.items()
+        }
+        
+        # Find the best channel in each band
+        best_channels = {}
         for band, band_data in analysis.band_analysis.items():
-            if band_data.congestion_score > 4:
-                recommendations.append(
-                    f"Consider using {'5 GHz' if band == '2.4' else '2.4 GHz'} "
-                    f"band due to high congestion (score: {band_data.congestion_score:.2f})"
-                )
-            
-            # Find best channel in the band
             if band_data.channels:
                 best_channel = min(band_data.channels.values(), 
                                  key=lambda x: x.congestion_score)
+                best_channels[band] = best_channel
+        
+        # Compare congestion scores and provide practical recommendations
+        if band_scores['2.4'] > 10 and band_scores['5'] > 10:
+            # Both bands are highly congested
+            recommendations.append(
+                "Both 2.4 GHz and 5 GHz bands are highly congested. "
+                "Consider using the following channels:"
+            )
+            for band, channel in best_channels.items():
                 recommendations.append(
-                    f"Best channel in {band} GHz band: {best_channel.channel} "
-                    f"(congestion score: {best_channel.congestion_score:.2f})"
+                    f"  - {band} GHz band: Channel {channel.channel} "
+                    f"(congestion score: {channel.congestion_score:.2f})"
                 )
-                if best_channel.is_dfs:
-                    recommendations.append(
-                        f"Note: Channel {best_channel.channel} is a DFS channel "
-                        "and requires radar detection"
-                    )
+        else:
+            # One band is better than the other
+            better_band = min(band_scores.items(), key=lambda x: x[1])[0]
+            worse_band = '5' if better_band == '2.4' else '2.4'
+            
+            recommendations.append(
+                f"The {better_band} GHz band has lower congestion. "
+                f"Best channel: {best_channels[better_band].channel} "
+                f"(congestion score: {best_channels[better_band].congestion_score:.2f})"
+            )
+            
+            if best_channels[worse_band].congestion_score < 10:
+                recommendations.append(
+                    f"Alternatively, you could use the {worse_band} GHz band on channel "
+                    f"{best_channels[worse_band].channel} "
+                    f"(congestion score: {best_channels[worse_band].congestion_score:.2f})"
+                )
+        
+        # Add DFS channel warnings if applicable
+        for band, channel in best_channels.items():
+            if channel.is_dfs:
+                recommendations.append(
+                    f"Note: Channel {channel.channel} in {band} GHz band is a DFS channel "
+                    "and requires radar detection"
+                )
     
     # Security recommendations
     if analysis.security_issues:

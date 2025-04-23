@@ -90,6 +90,10 @@ def get_5ghz_channel(frequency: str) -> Optional[int]:
             channel = (freq - 5180) // 20 + 36
             logger.debug(f"UNII-1/2A channel: {channel}")
             return channel
+        elif 5320 < freq <= 5500:  # UNII-2A (Extended)
+            channel = (freq - 5320) // 20 + 64
+            logger.debug(f"UNII-2A Extended channel: {channel}")
+            return channel
         elif 5500 <= freq <= 5700:  # UNII-2C
             channel = (freq - 5500) // 20 + 100
             logger.debug(f"UNII-2C channel: {channel}")

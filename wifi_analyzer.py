@@ -195,8 +195,8 @@ def analyze_channel_congestion(networks: List[NetworkInfo]) -> Dict[str, BandAna
         avg_congestion = np.mean([ca.congestion_score for ca in channel_analysis.values()]) if channel_analysis else 0
         
         band_recommendation = (
-            f"Consider using {'5 GHz' if band == '2.4' else '2.4 GHz'} if possible" 
-            if avg_congestion > 4 else
+            f"Consider using {'5 GHz' if band == '2.4' else '2.4 GHz'} "
+            f"if possible" if avg_congestion > 4 else
             "Good band choice"
         )
         
@@ -299,6 +299,14 @@ def generate_recommendations(analysis: AnalysisResult) -> List[str]:
 def display_analysis(analysis: AnalysisResult):
     """Display analysis results with color-coded output."""
     print("\n=== Wi-Fi Network Analysis ===\n")
+    
+    # Display metrics explanation
+    print(f"{Fore.CYAN}Analysis Metrics:{Style.RESET_ALL}")
+    print("Congestion Score: Higher is worse (0-5: Good, 5-10: Moderate, >10: High congestion)")
+    print("Signal Strength: Higher is better (>-50 dBm: Excellent, -50 to -70 dBm: Good, <-70 dBm: Weak)")
+    print("DFS Channels: Yellow indicates channels requiring radar detection")
+    print("Security: Red indicates outdated or missing encryption")
+    print("\n" + "="*50 + "\n")
     
     # Display band analysis
     for band, band_data in analysis.band_analysis.items():

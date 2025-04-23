@@ -81,9 +81,10 @@ def get_5ghz_channel(frequency: str) -> Optional[int]:
     """Convert frequency in MHz to 5 GHz channel number."""
     try:
         logger.debug(f"Converting frequency: {frequency}")
-        # Remove '5' prefix and convert to integer
-        freq = int(frequency.replace('5', ''))
+        # Convert frequency string to integer (it's already in MHz)
+        freq = int(frequency)
         logger.debug(f"Converted to integer: {freq}")
+        
         # Convert frequency to channel number
         if 5180 <= freq <= 5320:  # UNII-1 and UNII-2A
             channel = (freq - 5180) // 20 + 36

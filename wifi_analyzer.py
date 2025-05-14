@@ -5,6 +5,7 @@ import re
 import sys
 import os
 import argparse
+import time
 from typing import List, Dict, Optional, Tuple
 import pandas as pd
 import numpy as np
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 from wifi_scanner import WiFiScanner, NetworkInfo, EncryptionType
+from wifi_db import WiFiDatabase
 
 # Initialize colorama
 init()
@@ -435,10 +437,25 @@ def display_analysis(analysis: AnalysisResult):
             print(f"  • {rec}")
         print()
 
+def record_analysis_to_db(analysis: AnalysisResult, db: WiFiDatabase):
+    """Record analysis results to the database."""
+    for band, band_data in analysis.band_analysis.items():
+        for channel, channel_data in band_data.channels.items():
+            db.record_analysis(
+                band=band,
+                channel=channel,
+                networks_count=len(channel_data.networks),
+                avg_signal=channel_data.signal_strength_avg,
+                congestion_score=channel_data.congestion_score,
+                is_dfs=channel_data.is_dfs
+            )
+
 def main():
     parser = argparse.ArgumentParser(description="Advanced Wi-Fi Network Analyzer")
     parser.add_argument("--recommend", action="store_true", help="Perform detailed analysis and provide recommendations")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--record", action="store_true", help="Record data to SQLite database every minute")
+    parser.add_argument("--db-path", default="wifi_data.db", help="Path to SQLite database file")
     args = parser.parse_args()
 
     if args.debug:
@@ -451,28 +468,53 @@ def main():
         sys.exit(1)
 
     try:
+        # Initialize database if recording is enabled
+        db = WiFiDatabase(args.db_path) if args.record else None
+        
         # Use existing scanner
         scanner = WiFiScanner()
-        networks = scanner.scan_networks()
         
-        if args.recommend:
-            # Perform detailed analysis
-            analysis = AnalysisResult()
-            analysis.band_analysis = analyze_channel_congestion(networks)
-            analysis.security_issues = analyze_security(networks)
-            analysis.weak_signals = analyze_signal_strength(networks)
-            analysis.recommendations = generate_recommendations(analysis)
-            
-            # Display results
-            display_analysis(analysis)
+        if args.record:
+            logger.info(f"Starting continuous recording to {args.db_path}")
+            try:
+                while True:
+                    networks = scanner.scan_networks()
+                    db.record_networks(networks)
+                    
+                    if args.recommend:
+                        analysis = AnalysisResult()
+                        analysis.band_analysis = analyze_channel_congestion(networks)
+                        analysis.security_issues = analyze_security(networks)
+                        analysis.weak_signals = analyze_signal_strength(networks)
+                        analysis.recommendations = generate_recommendations(analysis)
+                        
+                        record_analysis_to_db(analysis, db)
+                        display_analysis(analysis)
+                    else:
+                        from wifi_scanner import display_networks
+                        display_networks(networks)
+                    
+                    time.sleep(60)  # Wait for 1 minute
+            except KeyboardInterrupt:
+                logger.info("Recording stopped by user")
         else:
-            # Display basic scan results
-            from wifi_scanner import display_networks
-            display_networks(networks)
+            networks = scanner.scan_networks()
+            
+            if args.recommend:
+                analysis = AnalysisResult()
+                analysis.band_analysis = analyze_channel_congestion(networks)
+                analysis.security_issues = analyze_security(networks)
+                analysis.weak_signals = analyze_signal_strength(networks)
+                analysis.recommendations = generate_recommendations(analysis)
+                
+                display_analysis(analysis)
+            else:
+                from wifi_scanner import display_networks
+                display_networks(networks)
             
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()

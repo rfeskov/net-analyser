@@ -58,6 +58,8 @@ class WiFiScanner:
         self.interface = None
         self.debug = False
         self.setup_logging()
+        logger.debug("WiFiScanner initialized")
+        self._detect_interface()
         self._setup_linux()
 
     def setup_logging(self):
@@ -77,6 +79,7 @@ class WiFiScanner:
 
     def _detect_interface(self) -> str:
         """Detect the default wireless interface on Linux."""
+        logger.debug("Starting interface detection")
         try:
             # Try iw command first
             result = subprocess.run(
@@ -85,11 +88,13 @@ class WiFiScanner:
                 text=True,
                 check=True
             )
+            logger.debug(f"iw dev output: {result.stdout}")
             # Extract the first wireless interface name
             match = re.search(r"Interface\s+(\w+)", result.stdout)
             if match:
                 interface = match.group(1)
-                logger.info(f"Found Wi-Fi interface: {interface}")
+                logger.info(f"Found Wi-Fi interface with iw: {interface}")
+                self.interface = interface
                 return interface
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.error(f"Error detecting interface with iw: {e}")
@@ -102,11 +107,13 @@ class WiFiScanner:
                 text=True,
                 check=True
             )
+            logger.debug(f"nmcli output: {result.stdout}")
             # Look for wireless devices
             for line in result.stdout.split('\n'):
                 if "wifi" in line.lower() and "device" in line.lower():
                     interface = line.split(':')[1].strip()
-                    logger.info(f"Found Wi-Fi interface: {interface}")
+                    logger.info(f"Found Wi-Fi interface with nmcli: {interface}")
+                    self.interface = interface
                     return interface
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.error(f"Error detecting interface with nmcli: {e}")
@@ -119,31 +126,38 @@ class WiFiScanner:
                 text=True,
                 check=True
             )
+            logger.debug(f"ip link show output: {result.stdout}")
             # Look for wireless interfaces (usually start with wl)
             for line in result.stdout.split('\n'):
                 if "wl" in line and "@" not in line:
                     interface = line.split(':')[1].strip()
-                    logger.info(f"Found Wi-Fi interface: {interface}")
+                    logger.info(f"Found Wi-Fi interface with ip: {interface}")
+                    self.interface = interface
                     return interface
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.error(f"Error detecting interface with ip: {e}")
         
         logger.warning("Using default Linux interface: wlan0")
+        self.interface = "wlan0"
         return "wlan0"  # Default Linux Wi-Fi interface
 
     def _check_permissions(self) -> bool:
         """Check if we have necessary permissions to scan networks."""
         try:
-            # Try nmcli first
-            result = subprocess.run(
-                ["nmcli", "device", "wifi", "list"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            # Check if we can access the wireless interface
+            result = subprocess.run(['iwconfig', self.interface], capture_output=True, text=True)
+            if result.returncode != 0:
+                return False
+            
+            # Check if we can set the channel
+            result = subprocess.run(['iw', 'dev', self.interface, 'set', 'channel', '1'], 
+                                  capture_output=True, text=True)
+            if result.returncode != 0:
+                return False
+            
             return True
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            logger.error(f"Error accessing nmcli: {e}")
+        except Exception as e:
+            logger.error(f"Error checking permissions: {e}")
             return False
 
     def _parse_nmcli_output(self, output: str) -> List[NetworkInfo]:
@@ -222,7 +236,10 @@ class WiFiScanner:
                 ssid = None
                 for element in pkt[Dot11Elt:]:
                     if element.ID == 0:  # SSID element
-                        ssid = element.info.decode()
+                        try:
+                            ssid = element.info.decode()
+                        except:
+                            ssid = str(element.info)
                         break
                 
                 if not ssid or ssid in seen_networks:
@@ -232,20 +249,70 @@ class WiFiScanner:
                 
                 # Extract channel
                 channel = None
+                logger.debug(f"Attempting to extract channel for network {ssid}")
                 for element in pkt[Dot11Elt:]:
+                    logger.debug(f"Processing element ID {element.ID} for network {ssid}")
                     if element.ID == 3:  # DS Parameter Set element
-                        channel = ord(element.info)
-                        break
+                        try:
+                            channel = ord(element.info)
+                            logger.debug(f"Found channel {channel} from DS Parameter Set for network {ssid}")
+                        except Exception as e:
+                            logger.debug(f"Failed to extract channel from DS Parameter Set for network {ssid}: {e}")
+                    elif element.ID == 1:  # Channel element
+                        try:
+                            channel = ord(element.info)
+                            logger.debug(f"Found channel {channel} from Channel element for network {ssid}")
+                        except Exception as e:
+                            logger.debug(f"Failed to extract channel from Channel element for network {ssid}: {e}")
+                    elif element.ID == 36:  # Supported Channels element
+                        try:
+                            # First byte is first channel number
+                            channel = ord(element.info[0])
+                            logger.debug(f"Found channel {channel} from Supported Channels for network {ssid}")
+                        except Exception as e:
+                            logger.debug(f"Failed to extract channel from Supported Channels for network {ssid}: {e}")
+                
+                if channel is None:
+                    logger.debug(f"Could not find channel information for network {ssid}")
+                    # Try to get channel from RadioTap header
+                    if hasattr(pkt, 'Channel'):
+                        try:
+                            channel = pkt.Channel
+                            logger.debug(f"Found channel {channel} from RadioTap header for network {ssid}")
+                        except Exception as e:
+                            logger.debug(f"Failed to extract channel from RadioTap header for network {ssid}: {e}")
+                
+                # Extract signal strength from RadioTap header
+                signal_strength = None
+                if hasattr(pkt, 'dBm_AntSignal'):
+                    signal_strength = pkt.dBm_AntSignal
+                    logger.debug(f"Found signal strength {signal_strength} dBm for network {ssid} using dBm_AntSignal")
+                elif hasattr(pkt, 'notdecoded'):
+                    try:
+                        # Try different offsets for RSSI
+                        for offset in range(-4, 0):
+                            try:
+                                rssi = -(256-ord(pkt.notdecoded[offset:offset+1]))
+                                if -100 <= rssi <= 0:  # Valid RSSI range
+                                    signal_strength = rssi
+                                    logger.debug(f"Found signal strength {signal_strength} dBm for network {ssid} using notdecoded")
+                                    break
+                            except (IndexError, TypeError):
+                                continue
+                    except:
+                        logger.debug(f"Failed to extract signal strength for network {ssid}")
                 
                 # Determine frequency based on channel
                 frequency = '2.4'
                 if channel and channel > 14:
                     frequency = '5'
+                    logger.debug(f"Network {ssid} is on 5 GHz band (channel {channel})")
                 
                 # Determine encryption type
                 security_type = EncryptionType.UNKNOWN.value
                 if pkt.haslayer(Dot11WEP):
                     security_type = EncryptionType.WEP.value
+                    logger.debug(f"Network {ssid} uses WEP encryption")
                 else:
                     # Check for WPA/WPA2/WPA3
                     rsn = None
@@ -264,18 +331,19 @@ class WiFiScanner:
                                 security_type = EncryptionType.WPA2.value
                             elif version == 1:
                                 security_type = EncryptionType.WPA.value
+                            logger.debug(f"Network {ssid} uses {security_type} encryption")
                 
                 # Create network info
                 network = NetworkInfo(
                     ssid=ssid,
                     bssid=bssid,
-                    signal_strength=-100,  # Default value
-                    channel=channel or 1,
+                    signal_strength=signal_strength,
+                    channel=channel,
                     frequency=frequency,
                     security_type=security_type
                 )
                 networks.append(network)
-                logger.debug(f"Found network: {ssid} ({bssid})")
+                logger.debug(f"Found network: {ssid} ({bssid}) - Signal: {signal_strength} dBm, Channel: {channel}, Security: {security_type}")
 
         try:
             # Start sniffing for 5 seconds
@@ -315,11 +383,71 @@ class WiFiScanner:
 
     def _setup_linux(self):
         """Set up the scanner for Linux systems."""
-        self.interface = self._detect_interface()
-        logger.info(f"Using interface: {self.interface}")
+        logger.debug(f"Setting up Linux interface: {self.interface}")
+        if not self.interface:
+            logger.error("No interface detected")
+            raise Exception("No wireless interface detected")
             
-        if not self._check_permissions():
-            raise PermissionError("Insufficient permissions to scan networks. Try running with sudo.")
+        try:
+            # First, try to stop NetworkManager
+            logger.debug("Attempting to stop NetworkManager")
+            subprocess.run(['systemctl', 'stop', 'NetworkManager'], capture_output=True)
+            logger.info("Stopped NetworkManager")
+            
+            # Then stop wpa_supplicant
+            logger.debug("Attempting to stop wpa_supplicant")
+            subprocess.run(['systemctl', 'stop', 'wpa_supplicant'], capture_output=True)
+            logger.info("Stopped wpa_supplicant")
+            
+            # Kill any processes that might interfere
+            logger.debug("Running airmon-ng check kill")
+            subprocess.run(['airmon-ng', 'check', 'kill'], capture_output=True)
+            
+            # Set interface to monitor mode
+            logger.debug(f"Attempting to set {self.interface} to monitor mode")
+            subprocess.run(['airmon-ng', 'start', self.interface], capture_output=True)
+            logger.info(f"Set {self.interface} to monitor mode")
+            
+            # Verify interface is in monitor mode
+            logger.debug("Verifying monitor mode")
+            result = subprocess.run(['iwconfig', self.interface], capture_output=True, text=True)
+            logger.debug(f"iwconfig output: {result.stdout}")
+            if 'Mode:Monitor' not in result.stdout:
+                raise Exception(f"Failed to set {self.interface} to monitor mode")
+            
+            # Set interface up
+            logger.debug("Setting interface up")
+            subprocess.run(['ip', 'link', 'set', self.interface, 'up'], capture_output=True)
+            logger.info(f"Set {self.interface} up")
+            
+            # Verify interface is up
+            logger.debug("Verifying interface state")
+            result = subprocess.run(['ip', 'link', 'show', self.interface], capture_output=True, text=True)
+            logger.debug(f"ip link show output: {result.stdout}")
+            if 'state UP' not in result.stdout:
+                raise Exception(f"Failed to bring {self.interface} up")
+            
+            logger.info(f"Successfully configured {self.interface}")
+            
+        except Exception as e:
+            logger.error(f"Error setting up interface: {e}")
+            # Try to restore NetworkManager
+            logger.debug("Attempting to restore NetworkManager")
+            subprocess.run(['systemctl', 'start', 'NetworkManager'], capture_output=True)
+            raise
+
+    def __del__(self):
+        """Cleanup when the scanner is destroyed."""
+        try:
+            # Restore NetworkManager
+            subprocess.run(['systemctl', 'start', 'NetworkManager'], capture_output=True)
+            logger.info("Restored NetworkManager")
+            
+            # Restore wpa_supplicant
+            subprocess.run(['systemctl', 'start', 'wpa_supplicant'], capture_output=True)
+            logger.info("Restored wpa_supplicant")
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
 
 def display_networks(networks: List[NetworkInfo], encryption_filter: Optional[str] = None) -> None:
     """Display the list of networks in a formatted table."""

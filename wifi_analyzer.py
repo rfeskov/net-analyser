@@ -15,6 +15,8 @@ from enum import Enum
 import logging
 from wifi_scanner import WiFiScanner, NetworkInfo, EncryptionType
 from wifi_db import WiFiDatabase
+from wifi_monitor import WiFiMonitor
+from threading import Thread
 
 # Initialize colorama
 init()
@@ -456,6 +458,7 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--record", action="store_true", help="Record data to SQLite database every minute")
     parser.add_argument("--db-path", default="wifi_data.db", help="Path to SQLite database file")
+    parser.add_argument("--interface", "-i", help="Specify the wireless interface to use")
     args = parser.parse_args()
 
     if args.debug:
@@ -473,13 +476,39 @@ def main():
         
         # Use existing scanner
         scanner = WiFiScanner()
+        if args.interface:
+            scanner.interface = args.interface
         
         if args.record:
             logger.info(f"Starting continuous recording to {args.db_path}")
+            
+            # Initialize Wi-Fi monitor
+            monitor = WiFiMonitor(scanner.interface)
+            
+            # Start frame capture in a separate thread
+            monitor_thread = Thread(target=monitor.start_capture)
+            monitor_thread.daemon = True
+            monitor_thread.start()
+            
             try:
                 while True:
+                    # Get basic network information
                     networks = scanner.scan_networks()
-                    db.record_networks(networks)
+                    
+                    # Get detailed metrics from frame capture
+                    metrics = monitor.get_metrics()
+                    
+                    # Update network information with metrics
+                    for network in networks:
+                        if network.bssid in metrics:
+                            network_metrics = metrics[network.bssid]
+                            # Update network info with metrics
+                            network.signal_strength = network_metrics.get('avg_rssi')
+                            network.channel = network_metrics.get('channel')
+                            network.security_type = network_metrics.get('security_type')
+                    
+                    # Record data to database
+                    db.record_networks(networks, metrics)
                     
                     if args.recommend:
                         analysis = AnalysisResult()
@@ -497,6 +526,7 @@ def main():
                     time.sleep(60)  # Wait for 1 minute
             except KeyboardInterrupt:
                 logger.info("Recording stopped by user")
+                monitor.stop()
         else:
             networks = scanner.scan_networks()
             

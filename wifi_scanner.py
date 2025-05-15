@@ -31,6 +31,36 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
+# 2.4 GHz channel to frequency mapping
+CHANNEL_TO_FREQ_24 = {
+    1: 2412, 2: 2417, 3: 2422, 4: 2427, 5: 2432,
+    6: 2437, 7: 2442, 8: 2447, 9: 2452, 10: 2457,
+    11: 2462, 12: 2467, 13: 2472, 14: 2484
+}
+
+# 5 GHz channel to frequency mapping
+CHANNEL_TO_FREQ_5 = {
+    36: 5180, 40: 5200, 44: 5220, 48: 5240,
+    52: 5260, 56: 5280, 60: 5300, 64: 5320,
+    100: 5500, 104: 5520, 108: 5540, 112: 5560,
+    116: 5580, 120: 5600, 124: 5620, 128: 5640,
+    132: 5660, 136: 5680, 140: 5700,
+    149: 5745, 153: 5765, 157: 5785, 161: 5805,
+    165: 5825
+}
+
+# Create reverse mappings
+FREQ_TO_CHANNEL_24 = {freq: chan for chan, freq in CHANNEL_TO_FREQ_24.items()}
+FREQ_TO_CHANNEL_5 = {freq: chan for chan, freq in CHANNEL_TO_FREQ_5.items()}
+
+def get_channel_from_freq(freq: int) -> tuple[Optional[int], str]:
+    """Convert frequency to channel number and determine band."""
+    if freq in FREQ_TO_CHANNEL_24:
+        return FREQ_TO_CHANNEL_24[freq], '2.4'
+    elif freq in FREQ_TO_CHANNEL_5:
+        return FREQ_TO_CHANNEL_5[freq], '5'
+    return None, 'Unknown'
+
 class EncryptionType(Enum):
     NONE = "Open"
     WEP = "WEP"
@@ -247,8 +277,9 @@ class WiFiScanner:
                 
                 seen_networks.add(ssid)
                 
-                # Extract channel
+                # Extract channel and frequency
                 channel = None
+                frequency = None
                 logger.debug(f"Attempting to extract channel for network {ssid}")
                 for element in pkt[Dot11Elt:]:
                     logger.debug(f"Processing element ID {element.ID} for network {ssid}")
@@ -282,6 +313,30 @@ class WiFiScanner:
                         except Exception as e:
                             logger.debug(f"Failed to extract channel from RadioTap header for network {ssid}: {e}")
                 
+                # If we have a channel, determine frequency
+                if channel is not None:
+                    if channel in CHANNEL_TO_FREQ_24:
+                        frequency = str(CHANNEL_TO_FREQ_24[channel])
+                    elif channel in CHANNEL_TO_FREQ_5:
+                        frequency = str(CHANNEL_TO_FREQ_5[channel])
+                
+                # If we still don't have frequency, try to get it from RadioTap
+                if frequency is None and hasattr(pkt, 'ChannelFrequency'):
+                    try:
+                        freq = pkt.ChannelFrequency
+                        channel, band = get_channel_from_freq(freq)
+                        frequency = str(freq)
+                        logger.debug(f"Found frequency {freq} MHz (channel {channel}) from RadioTap for network {ssid}")
+                    except Exception as e:
+                        logger.debug(f"Failed to extract frequency from RadioTap for network {ssid}: {e}")
+                
+                # Determine band based on frequency
+                band = '2.4'
+                if frequency:
+                    freq = int(frequency)
+                    if freq >= 5000:  # 5 GHz starts at 5000 MHz
+                        band = '5'
+                
                 # Extract signal strength from RadioTap header
                 signal_strength = None
                 if hasattr(pkt, 'dBm_AntSignal'):
@@ -301,12 +356,6 @@ class WiFiScanner:
                                 continue
                     except:
                         logger.debug(f"Failed to extract signal strength for network {ssid}")
-                
-                # Determine frequency based on channel
-                frequency = '2.4'
-                if channel and channel > 14:
-                    frequency = '5'
-                    logger.debug(f"Network {ssid} is on 5 GHz band (channel {channel})")
                 
                 # Determine encryption type
                 security_type = EncryptionType.UNKNOWN.value
@@ -339,11 +388,11 @@ class WiFiScanner:
                     bssid=bssid,
                     signal_strength=signal_strength,
                     channel=channel,
-                    frequency=frequency,
+                    frequency=band,  # Use band instead of frequency
                     security_type=security_type
                 )
                 networks.append(network)
-                logger.debug(f"Found network: {ssid} ({bssid}) - Signal: {signal_strength} dBm, Channel: {channel}, Security: {security_type}")
+                logger.debug(f"Found network: {ssid} ({bssid}) - Signal: {signal_strength} dBm, Channel: {channel}, Band: {band}, Security: {security_type}")
 
         try:
             # Start sniffing for 5 seconds

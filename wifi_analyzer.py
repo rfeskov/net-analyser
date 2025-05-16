@@ -509,16 +509,16 @@ def main():
                     
                     # Record data to database
                     db.record_networks(networks, metrics)
-                    
-                    if args.recommend:
-                        analysis = AnalysisResult()
-                        analysis.band_analysis = analyze_channel_congestion(networks)
-                        analysis.security_issues = analyze_security(networks)
-                        analysis.weak_signals = analyze_signal_strength(networks)
-                        analysis.recommendations = generate_recommendations(analysis)
-                        
+        
+        if args.recommend:
+            analysis = AnalysisResult()
+            analysis.band_analysis = analyze_channel_congestion(networks)
+            analysis.security_issues = analyze_security(networks)
+            analysis.weak_signals = analyze_signal_strength(networks)
+            analysis.recommendations = generate_recommendations(analysis)
+            
                         record_analysis_to_db(analysis, db)
-                        display_analysis(analysis)
+            display_analysis(analysis)
                     else:
                         from wifi_scanner import display_networks
                         display_networks(networks)
@@ -539,12 +539,12 @@ def main():
                 
                 display_analysis(analysis)
             else:
-                from wifi_scanner import display_networks
-                display_networks(networks)
+            from wifi_scanner import display_networks
+            display_networks(networks)
             
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    main() 

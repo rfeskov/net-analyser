@@ -1,0 +1,54 @@
+{
+    "office_main": {
+        "ssid": "Office-Network",
+        "bssid": "00:11:22:33:44:55",
+        "channel": 36,
+        "frequency": "5",
+        "security_type": "WPA2",
+        "baseline_clients": 20,
+        "peak_clients": 50,
+        "baseline_rssi": -55,
+        "rssi_variation": 10,
+        "baseline_phy_rate": 866000,
+        "phy_rate_variation": 200000
+    },
+    "office_guest": {
+        "ssid": "Office-Guest",
+        "bssid": "00:11:22:33:44:66",
+        "channel": 1,
+        "frequency": "2.4",
+        "security_type": "WPA2",
+        "baseline_clients": 5,
+        "peak_clients": 15,
+        "baseline_rssi": -65,
+        "rssi_variation": 15,
+        "baseline_phy_rate": 144000,
+        "phy_rate_variation": 100000
+    },
+    "conference_room": {
+        "ssid": "Conference-Network",
+        "bssid": "00:11:22:33:44:77",
+        "channel": 149,
+        "frequency": "5",
+        "security_type": "WPA3",
+        "baseline_clients": 10,
+        "peak_clients": 30,
+        "baseline_rssi": -50,
+        "rssi_variation": 8,
+        "baseline_phy_rate": 1733000,
+        "phy_rate_variation": 300000
+    },
+    "cafe": {
+        "ssid": "Cafe-WiFi",
+        "bssid": "00:11:22:33:44:88",
+        "channel": 6,
+        "frequency": "2.4",
+        "security_type": "Open",
+        "baseline_clients": 3,
+        "peak_clients": 25,
+        "baseline_rssi": -60,
+        "rssi_variation": 20,
+        "baseline_phy_rate": 72000,
+        "phy_rate_variation": 50000
+    }
+} 

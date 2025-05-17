@@ -51,19 +51,19 @@ class WiFiMLPredictor:
         
         # Define feature types
         self.categorical_features = [
-            'ssid', 'bssid', 'security_type', 'frequency'
+            'ssid', 'bssid', 'security_type'
         ]
         self.numerical_features = [
-            'signal_strength', 'channel', 'phy_rate', 'client_count',
+            'signal_strength', 'channel', 'frequency', 'phy_rate', 'client_count',
             'retransmission_count', 'lost_packets', 'airtime_ms',
             'day_of_week', 'month', 'day', 'minutes_since_midnight'
         ]
         
         # Define target variables
-        self.categorical_targets = ['security_type', 'frequency']
+        self.categorical_targets = ['security_type']
         self.numerical_targets = [
             'signal_strength', 'client_count', 'retransmission_count',
-            'lost_packets', 'airtime_ms'
+            'lost_packets', 'airtime_ms', 'frequency'
         ]
         
         # Define feature columns (excluding targets)

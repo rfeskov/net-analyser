@@ -4,43 +4,55 @@ A command-line tool for predicting Wi-Fi channel parameters based on time and da
 
 ## Quick Start
 
-Basic usage with default settings:
+1. Train the model:
 ```bash
-python predict.py --date 2024-03-15 --time 14:30
+python predict.py train --train-data your_data.csv
 ```
 
-## Command Line Arguments
+2. Make predictions:
+```bash
+python predict.py predict --date 2024-03-15 --time 14:30
+```
 
-### Required Arguments
-- `--date`: Date in YYYY-MM-DD format
-- `--time`: Time in HH:MM format (24-hour)
+## Commands
 
-### Optional Arguments
-- `--model`: Path to trained model file (default: wifi_model.joblib)
+### Train Command
+Train a new model:
+```bash
+python predict.py train --train-data <path_to_data> [--model <model_path>]
+```
+
+Arguments:
+- `--train-data`: Path to training data CSV file (required)
+- `--model`: Path to save the trained model (default: wifi_model.joblib)
+
+### Predict Command
+Make predictions using a trained model:
+```bash
+python predict.py predict --date <YYYY-MM-DD> --time <HH:MM> [--model <model_path>] [--output <output_path>]
+```
+
+Arguments:
+- `--date`: Date in YYYY-MM-DD format (required)
+- `--time`: Time in HH:MM format (24-hour) (required)
+- `--model`: Path to the trained model file (default: wifi_model.joblib)
 - `--output`: Output CSV file path (default: auto-generated with timestamp)
-- `--train-data`: Path to training data CSV file (default: aggregated_wifi_data.csv)
-- `--retrain`: Retrain the model before making predictions
 
 ## Examples
 
-1. Make predictions with custom output file:
+1. Train a new model:
 ```bash
-python predict.py --date 2024-03-15 --time 14:30 --output predictions.csv
+python predict.py train --train-data wifi_data.csv --model my_model.joblib
 ```
 
-2. Use a different model:
+2. Make predictions with custom output file:
 ```bash
-python predict.py --date 2024-03-15 --time 14:30 --model my_model.joblib
+python predict.py predict --date 2024-03-15 --time 14:30 --output predictions.csv
 ```
 
-3. Retrain the model:
+3. Use a different model:
 ```bash
-python predict.py --date 2024-03-15 --time 14:30 --retrain
-```
-
-4. Use custom training data:
-```bash
-python predict.py --date 2024-03-15 --time 14:30 --retrain --train-data my_data.csv
+python predict.py predict --date 2024-03-15 --time 14:30 --model my_model.joblib
 ```
 
 ## Output Format
@@ -59,6 +71,18 @@ The script generates a CSV file with the following columns:
 - `avg_retransmission_count`: Predicted retransmissions
 - `avg_lost_packets`: Predicted lost packets
 - `avg_airtime`: Predicted airtime (ms)
+
+## Channel Handling
+
+The model handles both existing and missing channels:
+- For channels present in the training data: Uses actual measurements
+- For missing channels: Assumes ideal conditions:
+  - Signal strength: -100 dBm (very weak)
+  - Network count: 0
+  - Client count: 0
+  - Retransmissions: 0
+  - Lost packets: 0
+  - Airtime: 0
 
 ## Supported Channels
 

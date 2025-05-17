@@ -320,4 +320,64 @@ Feel free to submit issues, fork the repository, and create pull requests for an
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+# Wi-Fi Network Data Aggregator
+
+This script processes Wi-Fi network monitoring data by aggregating statistics per channel and time period.
+
+## Requirements
+
+- Python 3.6 or higher
+- pandas library
+
+## Installation
+
+1. Clone this repository or download the script files
+2. Install the required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Usage
+
+Run the script from the command line, providing the input and output file paths:
+
+```bash
+python wifi_data_aggregator.py input.csv output.csv
+```
+
+### Input Data Format
+
+The input CSV file should contain the following columns:
+- `ssid` (string) — Network identifier
+- `bssid` (string) — MAC address of the access point
+- `signal_strength` (integer) — Signal strength in dBm
+- `channel` (integer) — Wi-Fi channel number
+- `frequency` (float) — Wi-Fi frequency
+- `security_type` (string) — Security protocol
+- `phy_rate` (integer) — Physical data rate
+- `client_count` (integer) — Number of connected clients
+- `retransmission_count` (integer) — Number of retransmissions
+- `lost_packets` (integer) — Number of lost packets
+- `airtime_ms` (integer) — Airtime in milliseconds
+- `day_of_week` (integer) — Day of the week (1–7)
+- `month` (integer) — Month (1–12)
+- `day` (integer) — Day of the month (1–31)
+- `minutes_since_midnight` (integer) — Minutes passed since midnight (0–1439)
+- `timestamp` (datetime) — Date and time of measurement
+
+### Output Data Format
+
+The output CSV file will contain the following columns:
+- `channel` (integer) — Wi-Fi channel number
+- `avg_signal_strength` (float) — Average signal strength (dBm)
+- `network_count` (integer) — Total number of networks
+- `total_client_count` (integer) — Total number of connected clients
+- `avg_retransmission_count` (float) — Average retransmission count
+- `avg_lost_packets` (float) — Average number of lost packets
+- `avg_airtime` (float) — Average airtime in milliseconds
+- `day_of_week` (integer) — Day of the week (1–7)
+- `month` (integer) — Month (1–12)
+- `day` (integer) — Day of the month (1–31)
+- `minutes_since_midnight` (integer) — Minutes passed since midnight (0–1439) 

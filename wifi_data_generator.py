@@ -117,7 +117,7 @@ class WiFiDataGenerator:
         return 1.0
     
     def _calculate_metrics(self, network: NetworkConfig, hour: float, 
-                         is_workday: bool = True) -> Dict:
+                         is_workday: bool = True, current_time: datetime = None) -> Dict:
         """Calculate network metrics for the given hour."""
         # Base temporal pattern
         temporal_factor = self._generate_temporal_pattern(hour, is_workday)
@@ -155,6 +155,9 @@ class WiFiDataGenerator:
         airtime_ms = int(airtime_factor * 1000 + np.random.normal(0, 100))
         airtime_ms = max(0, min(1000, airtime_ms))  # Clamp to realistic range
         
+        # Calculate time-related features
+        minutes_since_midnight = current_time.hour * 60 + current_time.minute
+        
         return {
             'ssid': network.ssid,
             'bssid': network.bssid,
@@ -166,7 +169,11 @@ class WiFiDataGenerator:
             'client_count': client_count,
             'retransmission_count': retransmissions,
             'lost_packets': lost_packets,
-            'airtime_ms': airtime_ms
+            'airtime_ms': airtime_ms,
+            'day_of_week': current_time.weekday(),  # 0-6 (Monday-Sunday)
+            'month': current_time.month,  # 1-12
+            'day': current_time.day,  # 1-31
+            'minutes_since_midnight': minutes_since_midnight
         }
     
     def generate_dataset(self, start_date: datetime, end_date: datetime, 
@@ -180,7 +187,7 @@ class WiFiDataGenerator:
             hour = current.hour + current.minute / 60
             
             for network in self.configs.values():
-                metrics = self._calculate_metrics(network, hour, is_workday)
+                metrics = self._calculate_metrics(network, hour, is_workday, current)
                 metrics['timestamp'] = current
                 records.append(metrics)
             

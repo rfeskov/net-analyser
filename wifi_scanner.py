@@ -267,8 +267,8 @@ class WiFiScanner:
                 for element in pkt[Dot11Elt:]:
                     if element.ID == 0:  # SSID element
                         try:
-                        ssid = element.info.decode()
-                        except:
+                            ssid = element.info.decode()
+                        except Exception:
                             ssid = str(element.info)
                         break
                 
@@ -291,7 +291,7 @@ class WiFiScanner:
                             logger.debug(f"Failed to extract channel from DS Parameter Set for network {ssid}: {e}")
                     elif element.ID == 1:  # Channel element
                         try:
-                        channel = ord(element.info)
+                            channel = ord(element.info)
                             logger.debug(f"Found channel {channel} from Channel element for network {ssid}")
                         except Exception as e:
                             logger.debug(f"Failed to extract channel from Channel element for network {ssid}: {e}")

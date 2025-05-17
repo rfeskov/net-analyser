@@ -34,7 +34,11 @@ class WiFiDatabase:
                     retransmission_count INTEGER,
                     lost_packets INTEGER,
                     airtime_ms INTEGER,
-                    timestamp DATETIME NOT NULL
+                    timestamp DATETIME NOT NULL,
+                    day_of_week INTEGER,
+                    month INTEGER,
+                    day INTEGER,
+                    minutes_since_midnight INTEGER
                 )
             ''')
             
@@ -48,7 +52,11 @@ class WiFiDatabase:
                     avg_signal_strength REAL,
                     congestion_score REAL,
                     is_dfs BOOLEAN,
-                    timestamp DATETIME NOT NULL
+                    timestamp DATETIME NOT NULL,
+                    day_of_week INTEGER,
+                    month INTEGER,
+                    day INTEGER,
+                    minutes_since_midnight INTEGER
                 )
             ''')
             
@@ -85,6 +93,10 @@ class WiFiDatabase:
     def record_networks(self, networks: List[NetworkInfo], metrics: Dict[str, Dict] = None):
         """Record network information to the database with additional metrics."""
         timestamp = datetime.now()
+        day_of_week = timestamp.weekday()  # 0-6 (Monday-Sunday)
+        month = timestamp.month  # 1-12
+        day = timestamp.day  # 1-31
+        minutes_since_midnight = timestamp.hour * 60 + timestamp.minute
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -98,8 +110,9 @@ class WiFiDatabase:
                         ssid, bssid, signal_strength, channel,
                         frequency, security_type, phy_rate,
                         client_count, retransmission_count,
-                        lost_packets, airtime_ms, timestamp
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        lost_packets, airtime_ms, timestamp,
+                        day_of_week, month, day, minutes_since_midnight
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     network.ssid,
                     network.bssid,
@@ -112,7 +125,11 @@ class WiFiDatabase:
                     network_metrics.get('retransmission_count'),
                     network_metrics.get('lost_packets'),
                     network_metrics.get('airtime_ms'),
-                    timestamp
+                    timestamp,
+                    day_of_week,
+                    month,
+                    day,
+                    minutes_since_midnight
                 ))
             
             conn.commit()
@@ -266,4 +283,30 @@ class WiFiDatabase:
                 'network_info': network_info,
                 'frame_stats': frame_stats,
                 'client_info': client_info
-            } 
+            }
+    
+    def record_analysis(self, band: str, channel: int, networks_count: int,
+                       avg_signal: float, congestion_score: float, is_dfs: bool,
+                       day_of_week: int, month: int, day: int, minutes_since_midnight: int):
+        """Record analysis results to the database."""
+        timestamp = datetime.now()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO analysis (
+                    band, channel, networks_count,
+                    avg_signal_strength, congestion_score,
+                    is_dfs, timestamp, day_of_week,
+                    month, day, minutes_since_midnight
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                band, channel, networks_count,
+                avg_signal, congestion_score,
+                is_dfs, timestamp, day_of_week,
+                month, day, minutes_since_midnight
+            ))
+            
+            conn.commit()
+            logger.info(f"Recorded analysis for {band} GHz band, channel {channel}") 

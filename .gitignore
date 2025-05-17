@@ -34,5 +34,7 @@ env/
 *.swo
 .DS_Store
 
-# Logs
 *.log 
+week_data.db
+weeks_data.db
+wifi_data.db

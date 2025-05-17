@@ -17,6 +17,7 @@ from wifi_scanner import WiFiScanner, NetworkInfo, EncryptionType
 from wifi_db import WiFiDatabase
 from wifi_monitor import WiFiMonitor
 from threading import Thread
+from datetime import datetime
 
 # Initialize colorama
 init()
@@ -441,6 +442,12 @@ def display_analysis(analysis: AnalysisResult):
 
 def record_analysis_to_db(analysis: AnalysisResult, db: WiFiDatabase):
     """Record analysis results to the database."""
+    timestamp = datetime.now()
+    day_of_week = timestamp.weekday()  # 0-6 (Monday-Sunday)
+    month = timestamp.month  # 1-12
+    day = timestamp.day  # 1-31
+    minutes_since_midnight = timestamp.hour * 60 + timestamp.minute
+    
     for band, band_data in analysis.band_analysis.items():
         for channel, channel_data in band_data.channels.items():
             db.record_analysis(
@@ -449,7 +456,11 @@ def record_analysis_to_db(analysis: AnalysisResult, db: WiFiDatabase):
                 networks_count=len(channel_data.networks),
                 avg_signal=channel_data.signal_strength_avg,
                 congestion_score=channel_data.congestion_score,
-                is_dfs=channel_data.is_dfs
+                is_dfs=channel_data.is_dfs,
+                day_of_week=day_of_week,
+                month=month,
+                day=day,
+                minutes_since_midnight=minutes_since_midnight
             )
 
 def main():
@@ -509,16 +520,16 @@ def main():
                     
                     # Record data to database
                     db.record_networks(networks, metrics)
-        
-        if args.recommend:
-            analysis = AnalysisResult()
-            analysis.band_analysis = analyze_channel_congestion(networks)
-            analysis.security_issues = analyze_security(networks)
-            analysis.weak_signals = analyze_signal_strength(networks)
-            analysis.recommendations = generate_recommendations(analysis)
-            
+                    
+                    if args.recommend:
+                        analysis = AnalysisResult()
+                        analysis.band_analysis = analyze_channel_congestion(networks)
+                        analysis.security_issues = analyze_security(networks)
+                        analysis.weak_signals = analyze_signal_strength(networks)
+                        analysis.recommendations = generate_recommendations(analysis)
+                        
                         record_analysis_to_db(analysis, db)
-            display_analysis(analysis)
+                        display_analysis(analysis)
                     else:
                         from wifi_scanner import display_networks
                         display_networks(networks)
@@ -539,8 +550,8 @@ def main():
                 
                 display_analysis(analysis)
             else:
-            from wifi_scanner import display_networks
-            display_networks(networks)
+                from wifi_scanner import display_networks
+                display_networks(networks)
             
     except Exception as e:
         logger.error(f"Error during analysis: {str(e)}")

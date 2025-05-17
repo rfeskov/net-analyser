@@ -144,29 +144,59 @@ class WiFiMLPredictor:
         Returns:
             Tuple of (numerical_features, categorical_features)
         """
-        # Ensure columns are in the correct order
-        data = data.reindex(columns=self.column_order)
-        
-        # Convert timestamp to datetime if it's not already
-        if 'timestamp' in data.columns:
-            data['timestamp'] = pd.to_datetime(data['timestamp'])
-        
-        # Process categorical features
-        categorical_data = {}
-        for feature in self.categorical_features:
-            if feature not in self.label_encoders:
-                self.label_encoders[feature] = LabelEncoder()
-                self.label_encoders[feature].fit(data[feature].unique())
+        try:
+            # Log available columns
+            logger.debug(f"Available columns: {data.columns.tolist()}")
             
-            categorical_data[feature] = self.label_encoders[feature].transform(data[feature])
+            # Ensure all required columns exist
+            missing_columns = [col for col in self.column_order if col not in data.columns]
+            if missing_columns:
+                logger.warning(f"Missing columns: {missing_columns}")
+                # Add missing columns with default values
+                for col in missing_columns:
+                    if col in self.categorical_features:
+                        data[col] = 'unknown'
+                    elif col in self.numerical_features:
+                        data[col] = 0
+                    elif col == 'timestamp':
+                        data[col] = pd.Timestamp.now()
+            
+            # Ensure columns are in the correct order
+            data = data.reindex(columns=self.column_order)
+            
+            # Convert timestamp to datetime if it's not already
+            if 'timestamp' in data.columns:
+                data['timestamp'] = pd.to_datetime(data['timestamp'])
+            
+            # Process categorical features
+            categorical_data = {}
+            for feature in self.categorical_features:
+                if feature not in self.label_encoders:
+                    self.label_encoders[feature] = LabelEncoder()
+                    # Handle potential NaN values
+                    unique_values = data[feature].fillna('unknown').unique()
+                    self.label_encoders[feature].fit(unique_values)
+                    logger.debug(f"Fitted encoder for {feature} with classes: {unique_values}")
+                
+                # Transform with handling of NaN values
+                categorical_data[feature] = self.label_encoders[feature].transform(
+                    data[feature].fillna('unknown')
+                )
 
-        # Process numerical features
-        numerical_data = data[self.numerical_features].values
-        if not hasattr(self.scaler, 'mean_'):
-            self.scaler.fit(numerical_data)
-        numerical_data = self.scaler.transform(numerical_data)
+            # Process numerical features
+            numerical_data = data[self.numerical_features].fillna(0).values
+            if not hasattr(self.scaler, 'mean_'):
+                self.scaler.fit(numerical_data)
+                logger.debug("Fitted new scaler")
+            numerical_data = self.scaler.transform(numerical_data)
 
-        return numerical_data, categorical_data
+            return numerical_data, categorical_data
+
+        except Exception as e:
+            logger.error(f"Error in preprocessing: {str(e)}")
+            logger.error(f"DataFrame info:\n{data.info()}")
+            logger.error(f"DataFrame head:\n{data.head()}")
+            raise
 
     def _save_models(self):
         """Save all models and preprocessing components."""
@@ -202,40 +232,56 @@ class WiFiMLPredictor:
             data: New data for model update
         """
         try:
+            # Log input data shape
+            logger.debug(f"Updating models with data shape: {data.shape}")
+            
             # Preprocess data
             numerical_data, categorical_data = self._preprocess_data(data)
             
             # Update categorical models
             for target in self.categorical_targets:
                 if target in data.columns:
-                    X = np.column_stack([numerical_data, categorical_data[target]])
-                    y = data[target].values
-                    self.categorical_models[target].partial_fit(X, y, classes=np.unique(y))
-                    
-                    # Calculate and log accuracy
-                    y_pred = self.categorical_models[target].predict(X)
-                    accuracy = accuracy_score(y, y_pred)
-                    self.performance_history['categorical_accuracy'].append(accuracy)
-                    logger.info(f"Updated categorical model for {target}, accuracy: {accuracy:.4f}")
+                    try:
+                        X = np.column_stack([numerical_data, categorical_data[target]])
+                        y = data[target].fillna('unknown').values
+                        unique_classes = np.unique(y)
+                        logger.debug(f"Unique classes for {target}: {unique_classes}")
+                        
+                        self.categorical_models[target].partial_fit(X, y, classes=unique_classes)
+                        
+                        # Calculate and log accuracy
+                        y_pred = self.categorical_models[target].predict(X)
+                        accuracy = accuracy_score(y, y_pred)
+                        self.performance_history['categorical_accuracy'].append(accuracy)
+                        logger.info(f"Updated categorical model for {target}, accuracy: {accuracy:.4f}")
+                    except Exception as e:
+                        logger.error(f"Error updating categorical model for {target}: {str(e)}")
+                        continue
 
             # Update numerical models
             for target in self.numerical_targets:
                 if target in data.columns:
-                    X = np.column_stack([numerical_data, categorical_data[target]])
-                    y = data[target].values
-                    self.numerical_models[target].partial_fit(X, y)
-                    
-                    # Calculate and log MSE
-                    y_pred = self.numerical_models[target].predict(X)
-                    mse = mean_squared_error(y, y_pred)
-                    self.performance_history['numerical_mse'].append(mse)
-                    logger.info(f"Updated numerical model for {target}, MSE: {mse:.4f}")
+                    try:
+                        X = np.column_stack([numerical_data, categorical_data[target]])
+                        y = data[target].fillna(0).values
+                        self.numerical_models[target].partial_fit(X, y)
+                        
+                        # Calculate and log MSE
+                        y_pred = self.numerical_models[target].predict(X)
+                        mse = mean_squared_error(y, y_pred)
+                        self.performance_history['numerical_mse'].append(mse)
+                        logger.info(f"Updated numerical model for {target}, MSE: {mse:.4f}")
+                    except Exception as e:
+                        logger.error(f"Error updating numerical model for {target}: {str(e)}")
+                        continue
 
             # Save models periodically
             self._save_models()
 
         except Exception as e:
-            logger.error(f"Error updating models: {e}")
+            logger.error(f"Error updating models: {str(e)}")
+            logger.error(f"DataFrame info:\n{data.info()}")
+            logger.error(f"DataFrame head:\n{data.head()}")
 
     def predict(self, data: pd.DataFrame) -> Dict[str, np.ndarray]:
         """Make predictions using the trained models.
@@ -286,8 +332,13 @@ def main():
     try:
         # Read data in chunks
         for chunk in pd.read_csv('wifi_data.csv', chunksize=1000):
+            # Log chunk information
+            logger.info(f"Processing chunk with shape: {chunk.shape}")
+            logger.debug(f"Chunk columns: {chunk.columns.tolist()}")
+            
             # Ensure timestamp column is properly parsed
-            chunk['timestamp'] = pd.to_datetime(chunk['timestamp'])
+            if 'timestamp' in chunk.columns:
+                chunk['timestamp'] = pd.to_datetime(chunk['timestamp'])
             
             # Update models with new data
             predictor.update(chunk)
@@ -308,7 +359,8 @@ def main():
                     logger.info(f"{metric}: {values[-1]:.4f}")
 
     except Exception as e:
-        logger.error(f"Error in main processing loop: {e}")
+        logger.error(f"Error in main processing loop: {str(e)}")
+        logger.error("Stack trace:", exc_info=True)
 
 if __name__ == "__main__":
     main() 

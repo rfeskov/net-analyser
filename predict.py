@@ -108,7 +108,7 @@ class WiFiMLPredictor:
                 logger.info(f"Loaded existing scaler with {len(self.scaler.mean_)} features")
 
             # Load label encoders
-            for feature in self.feature_columns['categorical']:
+            for feature in self.categorical_features:
                 encoder_path = os.path.join(self.model_dir, f'encoder_{feature}.pkl')
                 if os.path.exists(encoder_path):
                     with open(encoder_path, 'rb') as f:
@@ -340,6 +340,14 @@ class WiFiMLPredictor:
                                 all_classes = np.unique(np.concatenate([existing_classes, new_classes]))
                                 self.label_encoders[target] = LabelEncoder()
                                 self.label_encoders[target].fit(all_classes)
+                                # Reinitialize model when classes change
+                                self.categorical_models[target] = MLPClassifier(
+                                    hidden_layer_sizes=(100, 50),
+                                    max_iter=1,
+                                    warm_start=True,
+                                    random_state=42
+                                )
+                                logger.debug(f"Reinitialized model for {target} due to new classes")
                         
                         # Transform target values
                         y_encoded = self.label_encoders[target].transform(y)

@@ -321,6 +321,7 @@ class WiFiMLPredictor:
                         
                         logger.debug(f"Feature matrix shape for {target}: {X.shape}")
                         
+                        # Get unique classes from the data
                         y = data[target].fillna('unknown').values
                         unique_classes = np.unique(y)
                         logger.debug(f"Unique classes for {target}: {unique_classes}")
@@ -330,9 +331,19 @@ class WiFiMLPredictor:
                             self.label_encoders[target] = LabelEncoder()
                             self.label_encoders[target].fit(unique_classes)
                             logger.debug(f"Initialized label encoder for {target}")
+                        else:
+                            # Update encoder with new classes if needed
+                            existing_classes = self.label_encoders[target].classes_
+                            new_classes = np.setdiff1d(unique_classes, existing_classes)
+                            if len(new_classes) > 0:
+                                logger.debug(f"Adding new classes to encoder: {new_classes}")
+                                all_classes = np.unique(np.concatenate([existing_classes, new_classes]))
+                                self.label_encoders[target] = LabelEncoder()
+                                self.label_encoders[target].fit(all_classes)
                         
                         # Transform target values
                         y_encoded = self.label_encoders[target].transform(y)
+                        logger.debug(f"Encoded classes: {self.label_encoders[target].classes_}")
                         
                         # Initialize or update model
                         if target not in self.categorical_models:
@@ -451,6 +462,7 @@ class WiFiMLPredictor:
                         logger.warning(f"Model for {target} is not fitted yet")
                         continue
                     
+                    # Get predictions and convert back to original labels
                     pred = self.categorical_models[target].predict(X)
                     predictions[target] = self.label_encoders[target].inverse_transform(pred)
                     logger.debug(f"Successfully made predictions for {target}")

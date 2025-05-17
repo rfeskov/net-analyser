@@ -11,6 +11,7 @@ from pathlib import Path
 import logging
 from typing import Tuple, Dict, List
 import json
+from datetime import datetime
 
 
 class WiFiChannelPredictor:
@@ -226,6 +227,94 @@ class WiFiChannelPredictor:
         # Save updated model
         self._save_model()
 
+    def predict_multiple_channels(self, day_of_week: int, month: int, day: int,
+                                minutes_since_midnight: int,
+                                channels_2_4ghz: List[int] = None,
+                                channels_5ghz: List[int] = None,
+                                output_file: str = None) -> pd.DataFrame:
+        """
+        Make predictions for multiple channels and save results to CSV.
+        
+        Args:
+            day_of_week (int): Day of the week (1-7)
+            month (int): Month (1-12)
+            day (int): Day of the month (1-31)
+            minutes_since_midnight (int): Minutes since midnight (0-1439)
+            channels_2_4ghz (List[int]): List of 2.4 GHz channels to predict
+            channels_5ghz (List[int]): List of 5 GHz channels to predict
+            output_file (str): Path to save the predictions CSV file
+            
+        Returns:
+            pd.DataFrame: DataFrame containing predictions for all channels
+        """
+        if self.model is None:
+            self.load_saved_model()
+        
+        # Default channels if none provided
+        if channels_2_4ghz is None:
+            channels_2_4ghz = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+        if channels_5ghz is None:
+            channels_5ghz = [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 
+                           116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 
+                           157, 161, 165]
+        
+        # Combine all channels
+        all_channels = channels_2_4ghz + channels_5ghz
+        
+        # Create results list
+        results = []
+        
+        # Make predictions for each channel
+        for channel in all_channels:
+            prediction = self.predict(
+                day_of_week=day_of_week,
+                month=month,
+                day=day,
+                minutes_since_midnight=minutes_since_midnight,
+                channel=channel
+            )
+            
+            # Add channel and time information
+            prediction['channel'] = channel
+            prediction['day_of_week'] = day_of_week
+            prediction['month'] = month
+            prediction['day'] = day
+            prediction['minutes_since_midnight'] = minutes_since_midnight
+            
+            # Convert minutes to time string
+            hours = minutes_since_midnight // 60
+            minutes = minutes_since_midnight % 60
+            prediction['time'] = f"{hours:02d}:{minutes:02d}"
+            
+            # Add band information
+            prediction['band'] = '2.4 GHz' if channel in channels_2_4ghz else '5 GHz'
+            
+            results.append(prediction)
+        
+        # Create DataFrame
+        df = pd.DataFrame(results)
+        
+        # Reorder columns
+        columns = [
+            'channel', 'band', 'day_of_week', 'month', 'day', 'time',
+            'minutes_since_midnight', 'avg_signal_strength', 'network_count',
+            'total_client_count', 'avg_retransmission_count', 'avg_lost_packets',
+            'avg_airtime'
+        ]
+        df = df[columns]
+        
+        # Save to CSV if output file specified
+        if output_file:
+            # Create timestamp for filename if not provided
+            if output_file == 'auto':
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                output_file = f'wifi_predictions_{timestamp}.csv'
+            
+            self.logger.info(f"Saving predictions to {output_file}")
+            df.to_csv(output_file, index=False)
+        
+        return df
+
 
 def main():
     # Example usage
@@ -239,17 +328,23 @@ def main():
         # Train model
         predictor.train_model(X, y)
         
-        # Example prediction
-        prediction = predictor.predict(
-            day_of_week=1,
-            month=1,
-            day=1,
-            minutes_since_midnight=720,  # Noon
-            channel=1
+        # Example: Predict for all channels at a specific time
+        predictions_df = predictor.predict_multiple_channels(
+            day_of_week=1,      # Monday
+            month=1,            # January
+            day=1,              # 1st day
+            minutes_since_midnight=720,  # Noon (12:00)
+            output_file='wifi_predictions.csv'
         )
         
-        print("\nExample Prediction:")
-        print(json.dumps(prediction, indent=2))
+        # Print summary of predictions
+        print("\nPrediction Summary:")
+        print("-" * 50)
+        print(f"Total channels predicted: {len(predictions_df)}")
+        print(f"2.4 GHz channels: {len(predictions_df[predictions_df['band'] == '2.4 GHz'])}")
+        print(f"5 GHz channels: {len(predictions_df[predictions_df['band'] == '5 GHz'])}")
+        print("\nSample predictions:")
+        print(predictions_df.head())
         
     except Exception as e:
         predictor.logger.error(f"Error: {str(e)}")

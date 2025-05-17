@@ -12,6 +12,7 @@ import logging
 from typing import Tuple, Dict, List
 import json
 from datetime import datetime
+import argparse
 
 
 class WiFiChannelPredictor:
@@ -316,39 +317,114 @@ class WiFiChannelPredictor:
         return df
 
 
+def parse_time(time_str: str) -> int:
+    """
+    Convert time string (HH:MM) to minutes since midnight.
+    
+    Args:
+        time_str (str): Time in HH:MM format
+        
+    Returns:
+        int: Minutes since midnight
+    """
+    try:
+        hours, minutes = map(int, time_str.split(':'))
+        if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+            raise ValueError
+        return hours * 60 + minutes
+    except ValueError:
+        raise ValueError("Time must be in HH:MM format (e.g., '14:30')")
+
+
 def main():
-    # Example usage
-    predictor = WiFiChannelPredictor()
+    parser = argparse.ArgumentParser(
+        description='Predict Wi-Fi channel parameters for a specific time and date.'
+    )
+    
+    # Required arguments
+    parser.add_argument('--date', required=True,
+                      help='Date in YYYY-MM-DD format')
+    parser.add_argument('--time', required=True,
+                      help='Time in HH:MM format (24-hour)')
+    
+    # Optional arguments
+    parser.add_argument('--model', default='wifi_model.joblib',
+                      help='Path to the trained model file (default: wifi_model.joblib)')
+    parser.add_argument('--output', default='auto',
+                      help='Output CSV file path (default: auto-generated with timestamp)')
+    parser.add_argument('--train-data', default='aggregated_wifi_data.csv',
+                      help='Path to training data CSV file (default: aggregated_wifi_data.csv)')
+    parser.add_argument('--retrain', action='store_true',
+                      help='Retrain the model before making predictions')
+    
+    args = parser.parse_args()
     
     try:
-        # Load and preprocess data
-        df = predictor.load_data('aggregated_wifi_data.csv')
-        X, y = predictor.preprocess_data(df)
+        # Parse date
+        date_parts = args.date.split('-')
+        if len(date_parts) != 3:
+            raise ValueError("Date must be in YYYY-MM-DD format")
         
-        # Train model
-        predictor.train_model(X, y)
+        year = int(date_parts[0])
+        month = int(date_parts[1])
+        day = int(date_parts[2])
         
-        # Example: Predict for all channels at a specific time
+        # Validate date
+        datetime(year, month, day)  # This will raise ValueError if date is invalid
+        
+        # Parse time
+        minutes_since_midnight = parse_time(args.time)
+        
+        # Calculate day of week (1-7, Monday=1)
+        date_obj = datetime(year, month, day)
+        day_of_week = date_obj.isoweekday()
+        
+        # Create predictor instance
+        predictor = WiFiChannelPredictor(model_path=args.model)
+        
+        # Train or load model
+        if args.retrain or not Path(args.model).exists():
+            print(f"Training model using data from {args.train_data}...")
+            df = predictor.load_data(args.train_data)
+            X, y = predictor.preprocess_data(df)
+            predictor.train_model(X, y)
+        else:
+            print(f"Loading existing model from {args.model}...")
+            predictor.load_saved_model()
+        
+        # Make predictions
+        print(f"\nMaking predictions for {args.date} at {args.time}...")
         predictions_df = predictor.predict_multiple_channels(
-            day_of_week=1,      # Monday
-            month=1,            # January
-            day=1,              # 1st day
-            minutes_since_midnight=720,  # Noon (12:00)
-            output_file='wifi_predictions.csv'
+            day_of_week=day_of_week,
+            month=month,
+            day=day,
+            minutes_since_midnight=minutes_since_midnight,
+            output_file=args.output
         )
         
-        # Print summary of predictions
+        # Print summary
         print("\nPrediction Summary:")
         print("-" * 50)
+        print(f"Date: {args.date}")
+        print(f"Time: {args.time}")
+        print(f"Day of week: {day_of_week}")
         print(f"Total channels predicted: {len(predictions_df)}")
         print(f"2.4 GHz channels: {len(predictions_df[predictions_df['band'] == '2.4 GHz'])}")
         print(f"5 GHz channels: {len(predictions_df[predictions_df['band'] == '5 GHz'])}")
-        print("\nSample predictions:")
-        print(predictions_df.head())
+        
+        if args.output != 'auto':
+            print(f"\nPredictions saved to: {args.output}")
+        
+        # Print sample predictions
+        print("\nSample predictions (first 5 channels):")
+        print(predictions_df.head().to_string())
         
     except Exception as e:
-        predictor.logger.error(f"Error: {str(e)}")
+        print(f"Error: {str(e)}")
+        return 1
+    
+    return 0
 
 
 if __name__ == '__main__':
-    main() 
+    exit(main()) 

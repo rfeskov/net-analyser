@@ -325,6 +325,16 @@ class WiFiMLPredictor:
                         unique_classes = np.unique(y)
                         logger.debug(f"Unique classes for {target}: {unique_classes}")
                         
+                        # Initialize or update label encoder for target
+                        if target not in self.label_encoders:
+                            self.label_encoders[target] = LabelEncoder()
+                            self.label_encoders[target].fit(unique_classes)
+                            logger.debug(f"Initialized label encoder for {target}")
+                        
+                        # Transform target values
+                        y_encoded = self.label_encoders[target].transform(y)
+                        
+                        # Initialize or update model
                         if target not in self.categorical_models:
                             self.categorical_models[target] = MLPClassifier(
                                 hidden_layer_sizes=(100, 50),
@@ -334,11 +344,17 @@ class WiFiMLPredictor:
                             )
                             logger.debug(f"Initialized new categorical model for {target}")
                         
-                        self.categorical_models[target].partial_fit(X, y, classes=unique_classes)
+                        # Fit or update model
+                        if not hasattr(self.categorical_models[target], 'n_outputs_'):
+                            logger.debug(f"First fit for {target} model")
+                            self.categorical_models[target].fit(X, y_encoded)
+                        else:
+                            logger.debug(f"Partial fit for {target} model")
+                            self.categorical_models[target].partial_fit(X, y_encoded, classes=unique_classes)
                         
                         # Calculate and log accuracy
                         y_pred = self.categorical_models[target].predict(X)
-                        accuracy = accuracy_score(y, y_pred)
+                        accuracy = accuracy_score(y_encoded, y_pred)
                         self.performance_history['categorical_accuracy'].append(accuracy)
                         logger.info(f"Updated categorical model for {target}, accuracy: {accuracy:.4f}")
                     except Exception as e:
@@ -370,7 +386,13 @@ class WiFiMLPredictor:
                             )
                             logger.debug(f"Initialized new numerical model for {target}")
                         
-                        self.numerical_models[target].partial_fit(X, y)
+                        # Fit or update model
+                        if not hasattr(self.numerical_models[target], 'n_outputs_'):
+                            logger.debug(f"First fit for {target} model")
+                            self.numerical_models[target].fit(X, y)
+                        else:
+                            logger.debug(f"Partial fit for {target} model")
+                            self.numerical_models[target].partial_fit(X, y)
                         
                         # Calculate and log MSE
                         y_pred = self.numerical_models[target].predict(X)
@@ -413,12 +435,21 @@ class WiFiMLPredictor:
                         logger.warning(f"No model available for {target}")
                         continue
                         
+                    if target not in self.label_encoders:
+                        logger.warning(f"No label encoder available for {target}")
+                        continue
+                        
                     # Create feature matrix
                     X = numerical_data
                     if categorical_data:
                         X = np.column_stack([X] + list(categorical_data.values()))
                     
                     logger.debug(f"Feature matrix shape for {target} prediction: {X.shape}")
+                    
+                    # Check if model is fitted
+                    if not hasattr(self.categorical_models[target], 'n_outputs_'):
+                        logger.warning(f"Model for {target} is not fitted yet")
+                        continue
                     
                     pred = self.categorical_models[target].predict(X)
                     predictions[target] = self.label_encoders[target].inverse_transform(pred)
@@ -441,6 +472,11 @@ class WiFiMLPredictor:
                         X = np.column_stack([X] + list(categorical_data.values()))
                     
                     logger.debug(f"Feature matrix shape for {target} prediction: {X.shape}")
+                    
+                    # Check if model is fitted
+                    if not hasattr(self.numerical_models[target], 'n_outputs_'):
+                        logger.warning(f"Model for {target} is not fitted yet")
+                        continue
                     
                     predictions[target] = self.numerical_models[target].predict(X)
                     logger.debug(f"Successfully made predictions for {target}")

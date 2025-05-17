@@ -51,7 +51,7 @@ class WiFiMLPredictor:
         
         # Define feature types
         self.categorical_features = [
-            'ssid', 'bssid', 'security_type'
+            'ssid', 'bssid'
         ]
         self.numerical_features = [
             'signal_strength', 'channel', 'frequency', 'phy_rate', 'client_count',
@@ -60,7 +60,7 @@ class WiFiMLPredictor:
         ]
         
         # Define target variables
-        self.categorical_targets = ['security_type']
+        self.categorical_targets = []  # No categorical targets
         self.numerical_targets = [
             'signal_strength', 'client_count', 'retransmission_count',
             'lost_packets', 'airtime_ms', 'frequency'
@@ -78,7 +78,6 @@ class WiFiMLPredictor:
         
         # Initialize performance metrics
         self.performance_history: Dict[str, List[float]] = {
-            'categorical_accuracy': [],
             'numerical_mse': []
         }
         
@@ -308,79 +307,6 @@ class WiFiMLPredictor:
             # Preprocess data
             numerical_data, categorical_data = self._preprocess_data(data)
             
-            # Update categorical models
-            for target in self.categorical_targets:
-                if target in data.columns:
-                    try:
-                        logger.debug(f"Updating categorical model for {target}")
-                        
-                        # Create feature matrix
-                        X = numerical_data
-                        if categorical_data:
-                            X = np.column_stack([X] + list(categorical_data.values()))
-                        
-                        logger.debug(f"Feature matrix shape for {target}: {X.shape}")
-                        
-                        # Get unique classes from the data
-                        y = data[target].fillna('unknown').values
-                        unique_classes = np.unique(y)
-                        logger.debug(f"Unique classes for {target}: {unique_classes}")
-                        
-                        # Initialize or update label encoder for target
-                        if target not in self.label_encoders:
-                            self.label_encoders[target] = LabelEncoder()
-                            self.label_encoders[target].fit(unique_classes)
-                            logger.debug(f"Initialized label encoder for {target}")
-                        else:
-                            # Update encoder with new classes if needed
-                            existing_classes = self.label_encoders[target].classes_
-                            new_classes = np.setdiff1d(unique_classes, existing_classes)
-                            if len(new_classes) > 0:
-                                logger.debug(f"Adding new classes to encoder: {new_classes}")
-                                all_classes = np.unique(np.concatenate([existing_classes, new_classes]))
-                                self.label_encoders[target] = LabelEncoder()
-                                self.label_encoders[target].fit(all_classes)
-                                # Reinitialize model when classes change
-                                self.categorical_models[target] = MLPClassifier(
-                                    hidden_layer_sizes=(100, 50),
-                                    max_iter=1,
-                                    warm_start=True,
-                                    random_state=42
-                                )
-                                logger.debug(f"Reinitialized model for {target} due to new classes")
-                        
-                        # Transform target values
-                        y_encoded = self.label_encoders[target].transform(y)
-                        logger.debug(f"Encoded classes: {self.label_encoders[target].classes_}")
-                        
-                        # Initialize or update model
-                        if target not in self.categorical_models:
-                            self.categorical_models[target] = MLPClassifier(
-                                hidden_layer_sizes=(100, 50),
-                                max_iter=1,
-                                warm_start=True,
-                                random_state=42
-                            )
-                            logger.debug(f"Initialized new categorical model for {target}")
-                        
-                        # Fit or update model
-                        if not hasattr(self.categorical_models[target], 'n_outputs_'):
-                            logger.debug(f"First fit for {target} model")
-                            self.categorical_models[target].fit(X, y_encoded)
-                        else:
-                            logger.debug(f"Partial fit for {target} model")
-                            self.categorical_models[target].partial_fit(X, y_encoded, classes=unique_classes)
-                        
-                        # Calculate and log accuracy
-                        y_pred = self.categorical_models[target].predict(X)
-                        accuracy = accuracy_score(y_encoded, y_pred)
-                        self.performance_history['categorical_accuracy'].append(accuracy)
-                        logger.info(f"Updated categorical model for {target}, accuracy: {accuracy:.4f}")
-                    except Exception as e:
-                        logger.error(f"Error updating categorical model for {target}: {str(e)}")
-                        logger.error(f"Data for {target}:\n{data[target].head()}")
-                        continue
-
             # Update numerical models
             for target in self.numerical_targets:
                 if target in data.columns:
@@ -447,38 +373,6 @@ class WiFiMLPredictor:
             
             predictions = {}
             
-            # Make categorical predictions
-            for target in self.categorical_targets:
-                try:
-                    if target not in self.categorical_models:
-                        logger.warning(f"No model available for {target}")
-                        continue
-                        
-                    if target not in self.label_encoders:
-                        logger.warning(f"No label encoder available for {target}")
-                        continue
-                        
-                    # Create feature matrix
-                    X = numerical_data
-                    if categorical_data:
-                        X = np.column_stack([X] + list(categorical_data.values()))
-                    
-                    logger.debug(f"Feature matrix shape for {target} prediction: {X.shape}")
-                    
-                    # Check if model is fitted
-                    if not hasattr(self.categorical_models[target], 'n_outputs_'):
-                        logger.warning(f"Model for {target} is not fitted yet")
-                        continue
-                    
-                    # Get predictions and convert back to original labels
-                    pred = self.categorical_models[target].predict(X)
-                    predictions[target] = self.label_encoders[target].inverse_transform(pred)
-                    logger.debug(f"Successfully made predictions for {target}")
-                except Exception as e:
-                    logger.error(f"Error making categorical prediction for {target}: {str(e)}")
-                    logger.error(f"Feature matrix shape: {X.shape if 'X' in locals() else 'Not created'}")
-                    continue
-
             # Make numerical predictions
             for target in self.numerical_targets:
                 try:

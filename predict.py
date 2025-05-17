@@ -175,9 +175,10 @@ class WiFiMLPredictor:
             if 'timestamp' in data.columns:
                 data['timestamp'] = pd.to_datetime(data['timestamp'])
             
-            # Process categorical features
+            # Process categorical features (excluding targets)
             categorical_data = {}
-            for feature in self.categorical_features:
+            categorical_features = [f for f in self.categorical_features if f not in self.categorical_targets]
+            for feature in categorical_features:
                 try:
                     if feature not in self.label_encoders:
                         self.label_encoders[feature] = LabelEncoder()
@@ -196,9 +197,10 @@ class WiFiMLPredictor:
                     logger.error(f"Data for {feature}:\n{data[feature].head()}")
                     raise
 
-            # Process numerical features
+            # Process numerical features (excluding targets)
             try:
-                numerical_data = data[self.numerical_features].fillna(0).values
+                numerical_features = [f for f in self.numerical_features if f not in self.numerical_targets]
+                numerical_data = data[numerical_features].fillna(0).values
                 if not hasattr(self.scaler, 'mean_'):
                     self.scaler.fit(numerical_data)
                     logger.debug("Fitted new scaler")
@@ -206,7 +208,7 @@ class WiFiMLPredictor:
                 logger.debug("Successfully processed numerical features")
             except Exception as e:
                 logger.error(f"Error processing numerical features: {str(e)}")
-                logger.error(f"Numerical data head:\n{data[self.numerical_features].head()}")
+                logger.error(f"Numerical data head:\n{data[numerical_features].head()}")
                 raise
 
             return numerical_data, categorical_data
@@ -263,9 +265,12 @@ class WiFiMLPredictor:
                 if target in data.columns:
                     try:
                         logger.debug(f"Updating categorical model for {target}")
-                        logger.debug(f"Available categorical data keys: {categorical_data.keys()}")
                         
-                        X = np.column_stack([numerical_data, categorical_data[target]])
+                        # Create feature matrix
+                        X = numerical_data
+                        if categorical_data:
+                            X = np.column_stack([X] + list(categorical_data.values()))
+                        
                         y = data[target].fillna('unknown').values
                         unique_classes = np.unique(y)
                         logger.debug(f"Unique classes for {target}: {unique_classes}")
@@ -288,7 +293,11 @@ class WiFiMLPredictor:
                     try:
                         logger.debug(f"Updating numerical model for {target}")
                         
-                        X = np.column_stack([numerical_data, categorical_data[target]])
+                        # Create feature matrix
+                        X = numerical_data
+                        if categorical_data:
+                            X = np.column_stack([X] + list(categorical_data.values()))
+                        
                         y = data[target].fillna(0).values
                         self.numerical_models[target].partial_fit(X, y)
                         
@@ -328,19 +337,35 @@ class WiFiMLPredictor:
             
             # Make categorical predictions
             for target in self.categorical_targets:
-                X = np.column_stack([numerical_data, categorical_data[target]])
-                pred = self.categorical_models[target].predict(X)
-                predictions[target] = self.label_encoders[target].inverse_transform(pred)
+                try:
+                    # Create feature matrix
+                    X = numerical_data
+                    if categorical_data:
+                        X = np.column_stack([X] + list(categorical_data.values()))
+                    
+                    pred = self.categorical_models[target].predict(X)
+                    predictions[target] = self.label_encoders[target].inverse_transform(pred)
+                except Exception as e:
+                    logger.error(f"Error making categorical prediction for {target}: {str(e)}")
+                    continue
 
             # Make numerical predictions
             for target in self.numerical_targets:
-                X = np.column_stack([numerical_data, categorical_data[target]])
-                predictions[target] = self.numerical_models[target].predict(X)
+                try:
+                    # Create feature matrix
+                    X = numerical_data
+                    if categorical_data:
+                        X = np.column_stack([X] + list(categorical_data.values()))
+                    
+                    predictions[target] = self.numerical_models[target].predict(X)
+                except Exception as e:
+                    logger.error(f"Error making numerical prediction for {target}: {str(e)}")
+                    continue
 
             return predictions
 
         except Exception as e:
-            logger.error(f"Error making predictions: {e}")
+            logger.error(f"Error making predictions: {str(e)}")
             return {}
 
     def get_performance_metrics(self) -> Dict[str, List[float]]:

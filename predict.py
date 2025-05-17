@@ -72,6 +72,10 @@ class WiFiMLPredictor:
             'numerical': [f for f in self.numerical_features if f not in self.numerical_targets]
         }
         
+        # Log feature columns for debugging
+        logger.debug(f"Categorical features: {self.feature_columns['categorical']}")
+        logger.debug(f"Numerical features: {self.feature_columns['numerical']}")
+        
         # Initialize performance metrics
         self.performance_history: Dict[str, List[float]] = {
             'categorical_accuracy': [],
@@ -204,15 +208,24 @@ class WiFiMLPredictor:
 
             # Process numerical features (excluding targets)
             try:
-                numerical_data = data[self.feature_columns['numerical']].fillna(0).values
+                # Get numerical features excluding targets
+                numerical_features = [f for f in self.numerical_features if f not in self.numerical_targets]
+                logger.debug(f"Processing numerical features: {numerical_features}")
+                
+                numerical_data = data[numerical_features].fillna(0).values
+                logger.debug(f"Numerical data shape before scaling: {numerical_data.shape}")
+                
                 if not hasattr(self.scaler, 'mean_'):
                     self.scaler.fit(numerical_data)
                     logger.debug("Fitted new scaler")
+                    logger.debug(f"Scaler feature count: {len(self.scaler.mean_)}")
+                
                 numerical_data = self.scaler.transform(numerical_data)
-                logger.debug(f"Successfully processed numerical features. Shape: {numerical_data.shape}")
+                logger.debug(f"Numerical data shape after scaling: {numerical_data.shape}")
             except Exception as e:
                 logger.error(f"Error processing numerical features: {str(e)}")
-                logger.error(f"Numerical data head:\n{data[self.feature_columns['numerical']].head()}")
+                logger.error(f"Numerical features being processed: {numerical_features}")
+                logger.error(f"Numerical data head:\n{data[numerical_features].head()}")
                 raise
 
             return numerical_data, categorical_data
@@ -229,26 +242,31 @@ class WiFiMLPredictor:
             # Save scaler
             with open(os.path.join(self.model_dir, 'scaler.pkl'), 'wb') as f:
                 pickle.dump(self.scaler, f)
+            logger.debug(f"Saved scaler with {len(self.scaler.mean_)} features")
 
             # Save label encoders
             for feature, encoder in self.label_encoders.items():
                 with open(os.path.join(self.model_dir, f'encoder_{feature}.pkl'), 'wb') as f:
                     pickle.dump(encoder, f)
+                logger.debug(f"Saved encoder for {feature}")
 
             # Save categorical models
             for target, model in self.categorical_models.items():
                 with open(os.path.join(self.model_dir, f'cat_model_{target}.pkl'), 'wb') as f:
                     pickle.dump(model, f)
+                logger.debug(f"Saved categorical model for {target}")
 
             # Save numerical models
             for target, model in self.numerical_models.items():
                 with open(os.path.join(self.model_dir, f'num_model_{target}.pkl'), 'wb') as f:
                     pickle.dump(model, f)
+                logger.debug(f"Saved numerical model for {target}")
 
             logger.info("Successfully saved all models and components")
 
         except Exception as e:
             logger.error(f"Error saving models: {e}")
+            logger.error("Stack trace:", exc_info=True)
 
     def update(self, data: pd.DataFrame):
         """Update models with new data.
@@ -281,6 +299,15 @@ class WiFiMLPredictor:
                         unique_classes = np.unique(y)
                         logger.debug(f"Unique classes for {target}: {unique_classes}")
                         
+                        if target not in self.categorical_models:
+                            self.categorical_models[target] = MLPClassifier(
+                                hidden_layer_sizes=(100, 50),
+                                max_iter=1,
+                                warm_start=True,
+                                random_state=42
+                            )
+                            logger.debug(f"Initialized new categorical model for {target}")
+                        
                         self.categorical_models[target].partial_fit(X, y, classes=unique_classes)
                         
                         # Calculate and log accuracy
@@ -307,6 +334,16 @@ class WiFiMLPredictor:
                         logger.debug(f"Feature matrix shape for {target}: {X.shape}")
                         
                         y = data[target].fillna(0).values
+                        
+                        if target not in self.numerical_models:
+                            self.numerical_models[target] = MLPRegressor(
+                                hidden_layer_sizes=(100, 50),
+                                max_iter=1,
+                                warm_start=True,
+                                random_state=42
+                            )
+                            logger.debug(f"Initialized new numerical model for {target}")
+                        
                         self.numerical_models[target].partial_fit(X, y)
                         
                         # Calculate and log MSE
@@ -346,6 +383,10 @@ class WiFiMLPredictor:
             # Make categorical predictions
             for target in self.categorical_targets:
                 try:
+                    if target not in self.categorical_models:
+                        logger.warning(f"No model available for {target}")
+                        continue
+                        
                     # Create feature matrix
                     X = numerical_data
                     if categorical_data:
@@ -364,6 +405,10 @@ class WiFiMLPredictor:
             # Make numerical predictions
             for target in self.numerical_targets:
                 try:
+                    if target not in self.numerical_models:
+                        logger.warning(f"No model available for {target}")
+                        continue
+                        
                     # Create feature matrix
                     X = numerical_data
                     if categorical_data:

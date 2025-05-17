@@ -148,6 +148,9 @@ class WiFiMLPredictor:
             # Log available columns
             logger.debug(f"Available columns: {data.columns.tolist()}")
             
+            # Create a copy of the data to avoid modifying the original
+            data = data.copy()
+            
             # Ensure all required columns exist
             missing_columns = [col for col in self.column_order if col not in data.columns]
             if missing_columns:
@@ -164,6 +167,10 @@ class WiFiMLPredictor:
             # Ensure columns are in the correct order
             data = data.reindex(columns=self.column_order)
             
+            # Log data after reindexing
+            logger.debug(f"Columns after reindexing: {data.columns.tolist()}")
+            logger.debug(f"Data shape: {data.shape}")
+            
             # Convert timestamp to datetime if it's not already
             if 'timestamp' in data.columns:
                 data['timestamp'] = pd.to_datetime(data['timestamp'])
@@ -171,24 +178,36 @@ class WiFiMLPredictor:
             # Process categorical features
             categorical_data = {}
             for feature in self.categorical_features:
-                if feature not in self.label_encoders:
-                    self.label_encoders[feature] = LabelEncoder()
-                    # Handle potential NaN values
-                    unique_values = data[feature].fillna('unknown').unique()
-                    self.label_encoders[feature].fit(unique_values)
-                    logger.debug(f"Fitted encoder for {feature} with classes: {unique_values}")
-                
-                # Transform with handling of NaN values
-                categorical_data[feature] = self.label_encoders[feature].transform(
-                    data[feature].fillna('unknown')
-                )
+                try:
+                    if feature not in self.label_encoders:
+                        self.label_encoders[feature] = LabelEncoder()
+                        # Handle potential NaN values
+                        unique_values = data[feature].fillna('unknown').unique()
+                        self.label_encoders[feature].fit(unique_values)
+                        logger.debug(f"Fitted encoder for {feature} with classes: {unique_values}")
+                    
+                    # Transform with handling of NaN values
+                    categorical_data[feature] = self.label_encoders[feature].transform(
+                        data[feature].fillna('unknown')
+                    )
+                    logger.debug(f"Successfully processed categorical feature: {feature}")
+                except Exception as e:
+                    logger.error(f"Error processing categorical feature {feature}: {str(e)}")
+                    logger.error(f"Data for {feature}:\n{data[feature].head()}")
+                    raise
 
             # Process numerical features
-            numerical_data = data[self.numerical_features].fillna(0).values
-            if not hasattr(self.scaler, 'mean_'):
-                self.scaler.fit(numerical_data)
-                logger.debug("Fitted new scaler")
-            numerical_data = self.scaler.transform(numerical_data)
+            try:
+                numerical_data = data[self.numerical_features].fillna(0).values
+                if not hasattr(self.scaler, 'mean_'):
+                    self.scaler.fit(numerical_data)
+                    logger.debug("Fitted new scaler")
+                numerical_data = self.scaler.transform(numerical_data)
+                logger.debug("Successfully processed numerical features")
+            except Exception as e:
+                logger.error(f"Error processing numerical features: {str(e)}")
+                logger.error(f"Numerical data head:\n{data[self.numerical_features].head()}")
+                raise
 
             return numerical_data, categorical_data
 
@@ -232,8 +251,9 @@ class WiFiMLPredictor:
             data: New data for model update
         """
         try:
-            # Log input data shape
+            # Log input data shape and columns
             logger.debug(f"Updating models with data shape: {data.shape}")
+            logger.debug(f"Input data columns: {data.columns.tolist()}")
             
             # Preprocess data
             numerical_data, categorical_data = self._preprocess_data(data)
@@ -242,6 +262,9 @@ class WiFiMLPredictor:
             for target in self.categorical_targets:
                 if target in data.columns:
                     try:
+                        logger.debug(f"Updating categorical model for {target}")
+                        logger.debug(f"Available categorical data keys: {categorical_data.keys()}")
+                        
                         X = np.column_stack([numerical_data, categorical_data[target]])
                         y = data[target].fillna('unknown').values
                         unique_classes = np.unique(y)
@@ -256,12 +279,15 @@ class WiFiMLPredictor:
                         logger.info(f"Updated categorical model for {target}, accuracy: {accuracy:.4f}")
                     except Exception as e:
                         logger.error(f"Error updating categorical model for {target}: {str(e)}")
+                        logger.error(f"Data for {target}:\n{data[target].head()}")
                         continue
 
             # Update numerical models
             for target in self.numerical_targets:
                 if target in data.columns:
                     try:
+                        logger.debug(f"Updating numerical model for {target}")
+                        
                         X = np.column_stack([numerical_data, categorical_data[target]])
                         y = data[target].fillna(0).values
                         self.numerical_models[target].partial_fit(X, y)
@@ -273,6 +299,7 @@ class WiFiMLPredictor:
                         logger.info(f"Updated numerical model for {target}, MSE: {mse:.4f}")
                     except Exception as e:
                         logger.error(f"Error updating numerical model for {target}: {str(e)}")
+                        logger.error(f"Data for {target}:\n{data[target].head()}")
                         continue
 
             # Save models periodically
@@ -282,6 +309,7 @@ class WiFiMLPredictor:
             logger.error(f"Error updating models: {str(e)}")
             logger.error(f"DataFrame info:\n{data.info()}")
             logger.error(f"DataFrame head:\n{data.head()}")
+            logger.error("Stack trace:", exc_info=True)
 
     def predict(self, data: pd.DataFrame) -> Dict[str, np.ndarray]:
         """Make predictions using the trained models.
@@ -335,6 +363,7 @@ def main():
             # Log chunk information
             logger.info(f"Processing chunk with shape: {chunk.shape}")
             logger.debug(f"Chunk columns: {chunk.columns.tolist()}")
+            logger.debug(f"Chunk head:\n{chunk.head()}")
             
             # Ensure timestamp column is properly parsed
             if 'timestamp' in chunk.columns:

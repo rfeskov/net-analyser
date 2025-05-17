@@ -41,13 +41,21 @@ class WiFiMLPredictor:
         self.categorical_models: Dict[str, MLPClassifier] = {}
         self.numerical_models: Dict[str, MLPRegressor] = {}
         
+        # Define column order
+        self.column_order = [
+            'ssid', 'bssid', 'signal_strength', 'channel', 'frequency',
+            'security_type', 'phy_rate', 'client_count', 'retransmission_count',
+            'lost_packets', 'airtime_ms', 'day_of_week', 'month', 'day',
+            'minutes_since_midnight', 'timestamp'
+        ]
+        
         # Define feature types
         self.categorical_features = [
             'ssid', 'bssid', 'security_type', 'frequency'
         ]
         self.numerical_features = [
             'signal_strength', 'channel', 'phy_rate', 'client_count',
-            'retransmission_count', 'lost_packets', 'airtime',
+            'retransmission_count', 'lost_packets', 'airtime_ms',
             'day_of_week', 'month', 'day', 'minutes_since_midnight'
         ]
         
@@ -55,7 +63,7 @@ class WiFiMLPredictor:
         self.categorical_targets = ['security_type', 'frequency']
         self.numerical_targets = [
             'signal_strength', 'client_count', 'retransmission_count',
-            'lost_packets', 'airtime'
+            'lost_packets', 'airtime_ms'
         ]
         
         # Initialize performance metrics
@@ -136,6 +144,13 @@ class WiFiMLPredictor:
         Returns:
             Tuple of (numerical_features, categorical_features)
         """
+        # Ensure columns are in the correct order
+        data = data.reindex(columns=self.column_order)
+        
+        # Convert timestamp to datetime if it's not already
+        if 'timestamp' in data.columns:
+            data['timestamp'] = pd.to_datetime(data['timestamp'])
+        
         # Process categorical features
         categorical_data = {}
         for feature in self.categorical_features:
@@ -271,6 +286,9 @@ def main():
     try:
         # Read data in chunks
         for chunk in pd.read_csv('wifi_data.csv', chunksize=1000):
+            # Ensure timestamp column is properly parsed
+            chunk['timestamp'] = pd.to_datetime(chunk['timestamp'])
+            
             # Update models with new data
             predictor.update(chunk)
             

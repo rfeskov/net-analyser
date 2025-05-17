@@ -22,9 +22,8 @@ python3 wifi_data_generator.py [options]
 ## Command Line Options
 
 ### Output Format Options
-- `--sqlite`: Save output to SQLite database (default)
-- `--csv`: Save output to CSV file
-- `--output OUTPUT`: Specify output file name (default: 'wifi_data.db' for SQLite or 'wifi_data.csv' for CSV)
+- `--output-db OUTPUT_DB`: Save output to DB file
+- `--output-csv OUTPUT_CSV`: Save output to CSV file
 
 ### Data Generation Options
 - `--networks NETWORKS`: Number of networks to generate (default: 50)

@@ -1,3 +1,14 @@
+```bash
+sudo python3 wifi_analyzer.py --record 
+```
+```bash
+sudo python3 wifi_data_generator.py --config network_config.json --start-date 2025-04-01 --end-date 2025-04-21 --output-db weeks_data.db
+```
+
+```bash
+python3 wifi_data_generator.py --config network_config.json --start-date 2025-04-01 --end-date 2025-04-21 --output-csv weeks_data.csv
+```
+
 # Wi-Fi Network Analyzer
 
 A comprehensive tool for analyzing and optimizing Wi-Fi networks, providing detailed insights into network performance, security, and channel optimization.

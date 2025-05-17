@@ -11,6 +11,7 @@ import os
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 import json
+import argparse
 
 # Set up logging
 logging.basicConfig(
@@ -415,6 +416,68 @@ class WiFiMLPredictor:
         """
         return self.performance_history
 
+    def predict_for_datetime(self, date: datetime, output_file: str = 'predictions.csv') -> None:
+        """Make predictions for a specific date and time.
+        
+        Args:
+            date: datetime object for which to make predictions
+            output_file: Path to save the predictions CSV
+        """
+        try:
+            # Create a DataFrame with the specified date
+            data = pd.DataFrame({
+                'day_of_week': [date.weekday()],
+                'month': [date.month],
+                'day': [date.day],
+                'minutes_since_midnight': [date.hour * 60 + date.minute],
+                'timestamp': [date]
+            })
+            
+            # Add dummy values for required features
+            data['ssid'] = 'dummy_ssid'
+            data['bssid'] = 'dummy_bssid'
+            data['signal_strength'] = 0
+            data['channel'] = 0
+            data['frequency'] = 0
+            data['phy_rate'] = 0
+            data['client_count'] = 0
+            data['retransmission_count'] = 0
+            data['lost_packets'] = 0
+            data['airtime_ms'] = 0
+            
+            # Make predictions
+            predictions = self.predict(data)
+            
+            if not predictions:
+                logger.error("No predictions were made")
+                return
+            
+            # Create a DataFrame with the predictions
+            results = pd.DataFrame({
+                'timestamp': [date],
+                'day_of_week': [date.weekday()],
+                'month': [date.month],
+                'day': [date.day],
+                'minutes_since_midnight': [date.hour * 60 + date.minute]
+            })
+            
+            # Add predictions to the results
+            for target, preds in predictions.items():
+                results[f'predicted_{target}'] = preds
+            
+            # Save to CSV
+            results.to_csv(output_file, index=False)
+            logger.info(f"Predictions saved to {output_file}")
+            
+            # Print the predictions
+            logger.info("\nPredictions:")
+            for target, preds in predictions.items():
+                logger.info(f"{target}: {preds[0]:.2f}")
+                
+        except Exception as e:
+            logger.error(f"Error making predictions for datetime: {str(e)}")
+            logger.error("Stack trace:", exc_info=True)
+
 def main():
     """Main function to demonstrate usage."""
     # Initialize predictor
@@ -451,9 +514,37 @@ def main():
                 if values:
                     logger.info(f"{metric}: {values[-1]:.4f}")
 
+        # Example: Make predictions for a specific date and time
+        target_date = datetime.now()
+        predictor.predict_for_datetime(target_date, 'predictions.csv')
+
     except Exception as e:
         logger.error(f"Error in main processing loop: {str(e)}")
         logger.error("Stack trace:", exc_info=True)
 
 if __name__ == "__main__":
-    main() 
+    parser = argparse.ArgumentParser(description='WiFi ML Predictor')
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('--predict', action='store_true', help='Make predictions for current time')
+    parser.add_argument('--date', type=str, help='Date for predictions (YYYY-MM-DD HH:MM)')
+    parser.add_argument('--output', type=str, default='predictions.csv', help='Output file for predictions')
+    
+    args = parser.parse_args()
+    
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+    
+    if args.predict or args.date:
+        predictor = WiFiMLPredictor()
+        if args.date:
+            try:
+                target_date = datetime.strptime(args.date, '%Y-%m-%d %H:%M')
+            except ValueError:
+                logger.error("Invalid date format. Use YYYY-MM-DD HH:MM")
+                exit(1)
+        else:
+            target_date = datetime.now()
+        
+        predictor.predict_for_datetime(target_date, args.output)
+    else:
+        main() 

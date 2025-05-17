@@ -106,6 +106,13 @@ class WiFiMLPredictor:
                     logger.warning("Feature columns configuration has changed. Will reinitialize scaler.")
                     self.scaler = StandardScaler()
 
+            # Load common values
+            common_values_path = os.path.join(self.model_dir, 'common_values.json')
+            if os.path.exists(common_values_path):
+                with open(common_values_path, 'r') as f:
+                    self.common_values = json.load(f)
+                logger.info("Loaded common values for categorical features")
+
             # Load scaler
             scaler_path = os.path.join(self.model_dir, 'scaler.pkl')
             if os.path.exists(scaler_path):
@@ -276,6 +283,11 @@ class WiFiMLPredictor:
                 json.dump(self.feature_columns, f)
             logger.debug("Saved feature columns configuration")
 
+            # Save common values
+            with open(os.path.join(self.model_dir, 'common_values.json'), 'w') as f:
+                json.dump(self.common_values, f)
+            logger.debug("Saved common values for categorical features")
+
             # Save label encoders
             for feature, encoder in self.label_encoders.items():
                 with open(os.path.join(self.model_dir, f'encoder_{feature}.pkl'), 'wb') as f:
@@ -438,6 +450,14 @@ class WiFiMLPredictor:
             output_file: Path to save the predictions CSV
         """
         try:
+            # Check if we have common values
+            missing_values = [feature for feature in self.categorical_features 
+                            if self.common_values[feature] is None]
+            if missing_values:
+                logger.error(f"Missing common values for features: {missing_values}")
+                logger.error("Please run the script with training data first to generate common values")
+                return
+
             # Create a DataFrame with the specified date
             data = pd.DataFrame({
                 'day_of_week': [date.weekday()],
@@ -449,11 +469,8 @@ class WiFiMLPredictor:
             
             # Add common values for categorical features
             for feature in self.categorical_features:
-                if self.common_values[feature] is not None:
-                    data[feature] = self.common_values[feature]
-                else:
-                    logger.warning(f"No common value available for {feature}")
-                    return
+                data[feature] = self.common_values[feature]
+                logger.debug(f"Using common value for {feature}: {self.common_values[feature]}")
             
             # Add default values for numerical features
             data['signal_strength'] = 0

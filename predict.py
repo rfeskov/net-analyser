@@ -42,6 +42,12 @@ class WiFiMLPredictor:
         self.categorical_models: Dict[str, MLPClassifier] = {}
         self.numerical_models: Dict[str, MLPRegressor] = {}
         
+        # Store common values for categorical features
+        self.common_values = {
+            'ssid': None,
+            'bssid': None
+        }
+        
         # Define column order
         self.column_order = [
             'ssid', 'bssid', 'signal_strength', 'channel', 'frequency',
@@ -305,6 +311,14 @@ class WiFiMLPredictor:
             logger.debug(f"Updating models with data shape: {data.shape}")
             logger.debug(f"Input data columns: {data.columns.tolist()}")
             
+            # Update common values for categorical features
+            for feature in self.categorical_features:
+                if feature in data.columns:
+                    value_counts = data[feature].value_counts()
+                    if not value_counts.empty:
+                        self.common_values[feature] = value_counts.index[0]
+                        logger.debug(f"Updated common value for {feature}: {self.common_values[feature]}")
+            
             # Preprocess data
             numerical_data, categorical_data = self._preprocess_data(data)
             
@@ -433,9 +447,15 @@ class WiFiMLPredictor:
                 'timestamp': [date]
             })
             
-            # Add dummy values for required features
-            data['ssid'] = 'dummy_ssid'
-            data['bssid'] = 'dummy_bssid'
+            # Add common values for categorical features
+            for feature in self.categorical_features:
+                if self.common_values[feature] is not None:
+                    data[feature] = self.common_values[feature]
+                else:
+                    logger.warning(f"No common value available for {feature}")
+                    return
+            
+            # Add default values for numerical features
             data['signal_strength'] = 0
             data['channel'] = 0
             data['frequency'] = 0

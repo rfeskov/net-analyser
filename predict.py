@@ -88,15 +88,27 @@ class WiFiMLPredictor:
     def _load_models(self):
         """Load existing models and preprocessing components if available."""
         try:
+            # Load feature columns if available
+            feature_columns_path = os.path.join(self.model_dir, 'feature_columns.json')
+            if os.path.exists(feature_columns_path):
+                with open(feature_columns_path, 'r') as f:
+                    saved_feature_columns = json.load(f)
+                # Update feature columns if they match
+                if saved_feature_columns == self.feature_columns:
+                    logger.info("Loaded existing feature columns configuration")
+                else:
+                    logger.warning("Feature columns configuration has changed. Will reinitialize scaler.")
+                    self.scaler = StandardScaler()
+
             # Load scaler
             scaler_path = os.path.join(self.model_dir, 'scaler.pkl')
             if os.path.exists(scaler_path):
                 with open(scaler_path, 'rb') as f:
                     self.scaler = pickle.load(f)
-                logger.info("Loaded existing scaler")
+                logger.info(f"Loaded existing scaler with {len(self.scaler.mean_)} features")
 
             # Load label encoders
-            for feature in self.categorical_features:
+            for feature in self.feature_columns['categorical']:
                 encoder_path = os.path.join(self.model_dir, f'encoder_{feature}.pkl')
                 if os.path.exists(encoder_path):
                     with open(encoder_path, 'rb') as f:
@@ -121,6 +133,7 @@ class WiFiMLPredictor:
 
         except Exception as e:
             logger.error(f"Error loading models: {e}")
+            logger.error("Stack trace:", exc_info=True)
             self._initialize_new_models()
 
     def _initialize_new_models(self):
@@ -215,6 +228,14 @@ class WiFiMLPredictor:
                 numerical_data = data[numerical_features].fillna(0).values
                 logger.debug(f"Numerical data shape before scaling: {numerical_data.shape}")
                 
+                # Check if we need to reinitialize the scaler
+                if hasattr(self.scaler, 'mean_'):
+                    expected_features = len(self.scaler.mean_)
+                    actual_features = numerical_data.shape[1]
+                    if expected_features != actual_features:
+                        logger.warning(f"Feature count mismatch: expected {expected_features}, got {actual_features}. Reinitializing scaler.")
+                        self.scaler = StandardScaler()
+                
                 if not hasattr(self.scaler, 'mean_'):
                     self.scaler.fit(numerical_data)
                     logger.debug("Fitted new scaler")
@@ -243,6 +264,11 @@ class WiFiMLPredictor:
             with open(os.path.join(self.model_dir, 'scaler.pkl'), 'wb') as f:
                 pickle.dump(self.scaler, f)
             logger.debug(f"Saved scaler with {len(self.scaler.mean_)} features")
+
+            # Save feature columns for reference
+            with open(os.path.join(self.model_dir, 'feature_columns.json'), 'w') as f:
+                json.dump(self.feature_columns, f)
+            logger.debug("Saved feature columns configuration")
 
             # Save label encoders
             for feature, encoder in self.label_encoders.items():

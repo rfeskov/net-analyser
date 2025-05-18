@@ -1,5 +1,15 @@
 # Wi-Fi Channel Analyzer
 
+# Generate and analyze 3 test points (default)
+python data_analyzer.py --test
+
+# Generate and analyze 5 test points
+python data_analyzer.py --test --test-points 5
+
+# Generate test data and save to custom output file
+python data_analyzer.py --test --output test_analysis.json
+
+
 # Basic usage
 python data_analyzer.py predictions.csv
 

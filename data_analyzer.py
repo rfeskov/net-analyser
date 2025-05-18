@@ -564,18 +564,112 @@ class WiFiChannelAnalyzer:
             for band, band_rec in recommendations.items():
                 print(f"  {band}: Channel {band_rec['recommended_channel']}")
 
+    def generate_test_data(self, num_points: int = 3) -> Dict[str, pd.DataFrame]:
+        """
+        Generate random but realistic test data for analysis.
+        
+        Args:
+            num_points (int): Number of points to generate (between 3 and 6)
+            
+        Returns:
+            Dict[str, pd.DataFrame]: Dictionary mapping point names to DataFrames
+        """
+        self.logger.info(f"Generating test data for {num_points} points")
+        
+        # Ensure num_points is between 3 and 6
+        num_points = max(3, min(6, num_points))
+        
+        # Define possible channels for each band
+        channels_2_4 = list(range(1, 14))  # 2.4 GHz channels
+        channels_5 = [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112,
+                     116, 120, 124, 128, 132, 136, 140, 144, 149, 153,
+                     157, 161, 165]  # 5 GHz channels
+        
+        # Generate data for each point
+        data_dict = {}
+        for i in range(num_points):
+            point_name = f"test_point_{i+1}"
+            rows = []
+            
+            # Generate data for each minute of the day
+            for minute in range(0, 1440, 5):  # 5-minute intervals
+                # 2.4 GHz band
+                channel_2_4 = np.random.choice(channels_2_4)
+                signal_2_4 = np.random.normal(-65, 10)  # Mean -65 dBm, std 10
+                networks_2_4 = np.random.randint(1, 5)
+                clients_2_4 = np.random.randint(1, 15)
+                retrans_2_4 = np.random.randint(5, 30)
+                lost_2_4 = np.random.randint(1, 10)
+                airtime_2_4 = np.random.randint(100, 500)
+                
+                rows.append({
+                    'channel': channel_2_4,
+                    'band': '2.4 GHz',
+                    'day_of_week': np.random.randint(0, 7),
+                    'month': np.random.randint(1, 13),
+                    'day': np.random.randint(1, 29),
+                    'time': f"{minute//60:02d}:{minute%60:02d}",
+                    'minutes_since_midnight': minute,
+                    'avg_signal_strength': signal_2_4,
+                    'network_count': networks_2_4,
+                    'total_client_count': clients_2_4,
+                    'avg_retransmission_count': retrans_2_4,
+                    'avg_lost_packets': lost_2_4,
+                    'avg_airtime': airtime_2_4
+                })
+                
+                # 5 GHz band
+                channel_5 = np.random.choice(channels_5)
+                signal_5 = np.random.normal(-55, 8)  # Mean -55 dBm, std 8
+                networks_5 = np.random.randint(1, 8)
+                clients_5 = np.random.randint(1, 40)
+                retrans_5 = np.random.randint(5, 25)
+                lost_5 = np.random.randint(1, 8)
+                airtime_5 = np.random.randint(200, 600)
+                
+                rows.append({
+                    'channel': channel_5,
+                    'band': '5 GHz',
+                    'day_of_week': np.random.randint(0, 7),
+                    'month': np.random.randint(1, 13),
+                    'day': np.random.randint(1, 29),
+                    'time': f"{minute//60:02d}:{minute%60:02d}",
+                    'minutes_since_midnight': minute,
+                    'avg_signal_strength': signal_5,
+                    'network_count': networks_5,
+                    'total_client_count': clients_5,
+                    'avg_retransmission_count': retrans_5,
+                    'avg_lost_packets': lost_5,
+                    'avg_airtime': airtime_5
+                })
+            
+            # Create DataFrame and add to dictionary
+            df = pd.DataFrame(rows)
+            data_dict[point_name] = df
+            
+            # Save test data to CSV
+            output_file = f"test_data_{point_name}.csv"
+            df.to_csv(output_file, index=False)
+            self.logger.info(f"Saved test data to {output_file}")
+        
+        return data_dict
+
 
 def main():
     parser = argparse.ArgumentParser(
         description='Wi-Fi Channel Analyzer - Analyze and optimize channel selection.'
     )
     
-    parser.add_argument('input_files', nargs='+',
+    parser.add_argument('input_files', nargs='*',
                        help='One or more CSV files containing prediction data')
     parser.add_argument('--output', '-o', default='analysis_results.json',
                        help='Output file path (default: analysis_results.json)')
     parser.add_argument('--weights', '-w', type=json.loads,
                        help='Custom weights for channel load calculation (JSON format)')
+    parser.add_argument('--test', '-t', action='store_true',
+                       help='Generate and analyze test data')
+    parser.add_argument('--test-points', type=int, default=3,
+                       help='Number of test points to generate (3-6, default: 3)')
     
     args = parser.parse_args()
     
@@ -583,8 +677,14 @@ def main():
         # Create analyzer instance
         analyzer = WiFiChannelAnalyzer(weights=args.weights)
         
-        # Load data
-        data_dict = analyzer.load_data(args.input_files)
+        if args.test:
+            # Generate and analyze test data
+            data_dict = analyzer.generate_test_data(args.test_points)
+        else:
+            # Load and analyze real data
+            if not args.input_files:
+                parser.error("No input files provided. Use --test for test mode or provide input files.")
+            data_dict = analyzer.load_data(args.input_files)
         
         # Analyze data
         analysis_results = analyzer.analyze_multiple_points(data_dict)

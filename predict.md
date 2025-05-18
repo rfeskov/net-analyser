@@ -9,9 +9,14 @@ A command-line tool for predicting Wi-Fi channel parameters based on time and da
 python predict.py train --train-data your_data.csv
 ```
 
-2. Make predictions:
+2. Make predictions for a specific time:
 ```bash
 python predict.py predict --date 2024-03-15 --time 14:30
+```
+
+3. Generate predictions for an entire day:
+```bash
+python predict.py predict-full-day --date 2024-03-15
 ```
 
 ## Commands
@@ -27,7 +32,7 @@ Arguments:
 - `--model`: Path to save the trained model (default: wifi_model.joblib)
 
 ### Predict Command
-Make predictions using a trained model:
+Make predictions for a specific time:
 ```bash
 python predict.py predict --date <YYYY-MM-DD> --time <HH:MM> [--model <model_path>] [--output <output_path>]
 ```
@@ -38,6 +43,17 @@ Arguments:
 - `--model`: Path to the trained model file (default: wifi_model.joblib)
 - `--output`: Output CSV file path (default: auto-generated with timestamp)
 
+### Predict Full Day Command
+Generate predictions for an entire day at one-minute intervals:
+```bash
+python predict.py predict-full-day --date <YYYY-MM-DD> [--model <model_path>] [--output <output_path>]
+```
+
+Arguments:
+- `--date`: Date in YYYY-MM-DD format (required)
+- `--model`: Path to the trained model file (default: wifi_model.joblib)
+- `--output`: Output CSV file path (default: auto-generated with timestamp)
+
 ## Examples
 
 1. Train a new model:
@@ -45,14 +61,14 @@ Arguments:
 python predict.py train --train-data wifi_data.csv --model my_model.joblib
 ```
 
-2. Make predictions with custom output file:
+2. Make predictions for a specific time:
 ```bash
 python predict.py predict --date 2024-03-15 --time 14:30 --output predictions.csv
 ```
 
-3. Use a different model:
+3. Generate predictions for an entire day:
 ```bash
-python predict.py predict --date 2024-03-15 --time 14:30 --model my_model.joblib
+python predict.py predict-full-day --date 2024-03-15 --output full_day_predictions.csv
 ```
 
 ## Output Format

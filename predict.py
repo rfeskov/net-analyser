@@ -11,8 +11,9 @@ from pathlib import Path
 import logging
 from typing import Tuple, Dict, List
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import argparse
+from tqdm import tqdm
 
 
 class WiFiChannelPredictor:
@@ -367,6 +368,56 @@ class WiFiChannelPredictor:
         
         return df
 
+    def predict_full_day(self, date: str, output_file: str = None) -> pd.DataFrame:
+        """
+        Generate predictions for an entire day at one-minute intervals.
+        
+        Args:
+            date (str): Date in YYYY-MM-DD format
+            output_file (str): Path to save the predictions CSV file
+            
+        Returns:
+            pd.DataFrame: DataFrame containing predictions for all channels throughout the day
+        """
+        if self.model is None:
+            self.load_saved_model()
+        
+        # Parse date
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        day_of_week = date_obj.isoweekday()
+        month = date_obj.month
+        day = date_obj.day
+        
+        # Create results list
+        all_predictions = []
+        
+        # Generate predictions for each minute of the day
+        for minutes in tqdm(range(1440), desc="Generating predictions"):
+            # Make predictions for all channels at this time
+            predictions_df = self.predict_multiple_channels(
+                day_of_week=day_of_week,
+                month=month,
+                day=day,
+                minutes_since_midnight=minutes,
+                output_file=None  # Don't save individual predictions
+            )
+            all_predictions.append(predictions_df)
+        
+        # Combine all predictions
+        full_day_df = pd.concat(all_predictions, ignore_index=True)
+        
+        # Save to CSV if output file specified
+        if output_file:
+            # Create timestamp for filename if not provided
+            if output_file == 'auto':
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                output_file = f'wifi_predictions_full_day_{timestamp}.csv'
+            
+            self.logger.info(f"Saving full day predictions to {output_file}")
+            full_day_df.to_csv(output_file, index=False)
+        
+        return full_day_df
+
 
 def parse_time(time_str: str) -> int:
     """
@@ -423,7 +474,7 @@ def main():
                             help='Path to save the trained model (default: wifi_model.joblib)')
     
     # Predict command
-    predict_parser = subparsers.add_parser('predict', help='Make predictions')
+    predict_parser = subparsers.add_parser('predict', help='Make predictions for a specific time')
     predict_parser.add_argument('--date', required=True,
                               help='Date in YYYY-MM-DD format')
     predict_parser.add_argument('--time', required=True,
@@ -432,6 +483,15 @@ def main():
                               help='Path to the trained model file')
     predict_parser.add_argument('--output', default='auto',
                               help='Output CSV file path')
+    
+    # Full day prediction command
+    full_day_parser = subparsers.add_parser('predict-full-day', help='Generate predictions for an entire day')
+    full_day_parser.add_argument('--date', required=True,
+                               help='Date in YYYY-MM-DD format')
+    full_day_parser.add_argument('--model', default='wifi_model.joblib',
+                               help='Path to the trained model file')
+    full_day_parser.add_argument('--output', default='auto',
+                               help='Output CSV file path')
     
     args = parser.parse_args()
     
@@ -491,6 +551,46 @@ def main():
             # Print sample predictions
             print("\nSample predictions (first 5 channels):")
             print(predictions_df.head().to_string())
+            
+            return 0
+            
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            return 1
+    elif args.command == 'predict-full-day':
+        try:
+            # Validate date format
+            datetime.strptime(args.date, '%Y-%m-%d')
+            
+            # Create predictor instance
+            predictor = WiFiChannelPredictor(model_path=args.model)
+            
+            # Load model
+            print(f"Loading model from {args.model}...")
+            predictor.load_saved_model()
+            
+            # Generate predictions for the full day
+            print(f"\nGenerating predictions for {args.date}...")
+            full_day_df = predictor.predict_full_day(
+                date=args.date,
+                output_file=args.output
+            )
+            
+            # Print summary
+            print("\nFull Day Prediction Summary:")
+            print("-" * 50)
+            print(f"Date: {args.date}")
+            print(f"Total predictions: {len(full_day_df)}")
+            print(f"Total channels: {len(full_day_df['channel'].unique())}")
+            print(f"2.4 GHz channels: {len(full_day_df[full_day_df['band'] == '2.4 GHz']['channel'].unique())}")
+            print(f"5 GHz channels: {len(full_day_df[full_day_df['band'] == '5 GHz']['channel'].unique())}")
+            
+            if args.output != 'auto':
+                print(f"\nPredictions saved to: {args.output}")
+            
+            # Print sample predictions
+            print("\nSample predictions (first 5 rows):")
+            print(full_day_df.head().to_string())
             
             return 0
             

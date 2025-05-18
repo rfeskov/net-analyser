@@ -115,8 +115,11 @@ class WiFiChannelAnalyzer:
         """
         self.logger.info("Calculating channel metrics")
         
-        # Calculate load scores for each row
-        df['load_score'] = df.apply(self._calculate_load_score, axis=1)
+        # Create a copy of the DataFrame to avoid SettingWithCopyWarning
+        df = df.copy()
+        
+        # Calculate load scores for each row using .loc
+        df.loc[:, 'load_score'] = df.apply(self._calculate_load_score, axis=1)
         
         # Group by channel and calculate metrics
         metrics = df.groupby(['channel', 'band']).agg({
@@ -174,7 +177,8 @@ class WiFiChannelAnalyzer:
         """
         self.logger.info("Analyzing point data")
         
-        # Sort by time
+        # Create a copy and sort by time
+        df = df.copy()
         df = df.sort_values('minutes_since_midnight')
         
         # Calculate metrics for each time period
@@ -190,6 +194,7 @@ class WiFiChannelAnalyzer:
         
         # Analyze each band separately
         for band in ['2.4 GHz', '5 GHz']:
+            # Create a copy of the band-specific DataFrame
             band_df = df[df['band'] == band].copy()
             if band_df.empty:
                 continue
@@ -197,7 +202,7 @@ class WiFiChannelAnalyzer:
             # Calculate metrics for each time point
             time_metrics = []
             for time in band_df['minutes_since_midnight'].unique():
-                time_df = band_df[band_df['minutes_since_midnight'] == time]
+                time_df = band_df[band_df['minutes_since_midnight'] == time].copy()
                 metrics = self.calculate_channel_metrics(time_df)
                 time_metrics.append({
                     'time': time,
@@ -214,8 +219,11 @@ class WiFiChannelAnalyzer:
                 if metrics.empty:
                     continue
                 
+                # Create a copy of metrics for sorting
+                metrics = metrics.copy()
+                
                 # Sort by combined score
-                metrics['combined_score'] = (
+                metrics.loc[:, 'combined_score'] = (
                     metrics['load_score_mean'] * (1 + metrics['load_score_variance'])
                 )
                 metrics = metrics.sort_values('combined_score')

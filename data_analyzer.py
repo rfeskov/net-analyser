@@ -129,14 +129,21 @@ class WiFiChannelAnalyzer:
             'avg_retransmission_count': 'mean',
             'avg_lost_packets': 'mean',
             'avg_airtime': 'mean',
-            'load_score': ['mean', 'var']  # Calculate both mean and variance
+            'load_score': ['mean', 'std']  # Use std instead of var for better stability
         }).reset_index()
         
         # Flatten the multi-level columns
         metrics.columns = ['channel', 'band', 
                          'avg_signal_strength', 'network_count', 'total_client_count',
                          'avg_retransmission_count', 'avg_lost_packets', 'avg_airtime',
-                         'load_score_mean', 'load_score_variance']
+                         'load_score_mean', 'load_score_std']
+        
+        # Calculate stability (1 - normalized standard deviation)
+        # Normalize std by mean to get coefficient of variation
+        metrics['stability'] = 1 - (metrics['load_score_std'] / metrics['load_score_mean']).fillna(0)
+        
+        # Ensure stability is between 0 and 1
+        metrics['stability'] = metrics['stability'].clip(0, 1)
         
         return metrics
 
@@ -222,9 +229,9 @@ class WiFiChannelAnalyzer:
                 # Create a copy of metrics for sorting
                 metrics = metrics.copy()
                 
-                # Sort by combined score
+                # Sort by combined score (using stability in the calculation)
                 metrics.loc[:, 'combined_score'] = (
-                    metrics['load_score_mean'] * (1 + metrics['load_score_variance'])
+                    metrics['load_score_mean'] * (1 - metrics['stability'])
                 )
                 metrics = metrics.sort_values('combined_score')
                 
@@ -246,7 +253,7 @@ class WiFiChannelAnalyzer:
                             'end_time': time_point['time'],
                             'channel': current_channel,
                             'load_score': float(period_metrics['load_score_mean']),
-                            'stability': float(1 - period_metrics['load_score_variance']),
+                            'stability': float(period_metrics['stability']),
                             'metrics': {
                                 'avg_signal_strength': float(period_metrics['avg_signal_strength']),
                                 'network_count': float(period_metrics['network_count']),
@@ -271,7 +278,7 @@ class WiFiChannelAnalyzer:
                     'end_time': band_df['minutes_since_midnight'].max(),
                     'channel': current_channel,
                     'load_score': float(period_metrics['load_score_mean']),
-                    'stability': float(1 - period_metrics['load_score_variance']),
+                    'stability': float(period_metrics['stability']),
                     'metrics': {
                         'avg_signal_strength': float(period_metrics['avg_signal_strength']),
                         'network_count': float(period_metrics['network_count']),

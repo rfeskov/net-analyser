@@ -594,8 +594,22 @@ class WiFiChannelAnalyzer:
             point_name = f"test_point_{i+1}"
             rows = []
             
-            # Generate data for each minute of the day
-            for minute in range(0, 1440, 5):  # 5-minute intervals
+            # Generate 4-6 random transition times throughout the day
+            num_transitions = np.random.randint(4, 7)
+            transition_times = sorted(np.random.choice(range(0, 1440, 5), num_transitions, replace=False))
+            transition_times = [0] + transition_times + [1440]  # Add start and end of day
+            
+            # Generate data for each time period
+            for j in range(len(transition_times) - 1):
+                start_time = transition_times[j]
+                end_time = transition_times[j + 1]
+                
+                # Generate random offset for start and end times (within 5 minutes)
+                start_offset = np.random.randint(-5, 6)
+                end_offset = np.random.randint(-5, 6)
+                start_time = max(0, min(1439, start_time + start_offset))
+                end_time = max(0, min(1439, end_time + end_offset))
+                
                 # 2.4 GHz band
                 channel_2_4 = int(np.random.choice(channels_2_4))
                 signal_2_4 = float(np.random.normal(-65, 10))  # Mean -65 dBm, std 10
@@ -604,22 +618,6 @@ class WiFiChannelAnalyzer:
                 retrans_2_4 = int(np.random.randint(5, 30))
                 lost_2_4 = int(np.random.randint(1, 10))
                 airtime_2_4 = int(np.random.randint(100, 500))
-                
-                rows.append({
-                    'channel': channel_2_4,
-                    'band': '2.4 GHz',
-                    'day_of_week': int(np.random.randint(0, 7)),
-                    'month': int(np.random.randint(1, 13)),
-                    'day': int(np.random.randint(1, 29)),
-                    'time': f"{minute//60:02d}:{minute%60:02d}",
-                    'minutes_since_midnight': int(minute),
-                    'avg_signal_strength': signal_2_4,
-                    'network_count': networks_2_4,
-                    'total_client_count': clients_2_4,
-                    'avg_retransmission_count': retrans_2_4,
-                    'avg_lost_packets': lost_2_4,
-                    'avg_airtime': airtime_2_4
-                })
                 
                 # 5 GHz band
                 channel_5 = int(np.random.choice(channels_5))
@@ -630,21 +628,45 @@ class WiFiChannelAnalyzer:
                 lost_5 = int(np.random.randint(1, 8))
                 airtime_5 = int(np.random.randint(200, 600))
                 
-                rows.append({
-                    'channel': channel_5,
-                    'band': '5 GHz',
-                    'day_of_week': int(np.random.randint(0, 7)),
-                    'month': int(np.random.randint(1, 13)),
-                    'day': int(np.random.randint(1, 29)),
-                    'time': f"{minute//60:02d}:{minute%60:02d}",
-                    'minutes_since_midnight': int(minute),
-                    'avg_signal_strength': signal_5,
-                    'network_count': networks_5,
-                    'total_client_count': clients_5,
-                    'avg_retransmission_count': retrans_5,
-                    'avg_lost_packets': lost_5,
-                    'avg_airtime': airtime_5
-                })
+                # Generate data points for this period
+                for minute in range(start_time, end_time, 5):  # 5-minute intervals
+                    # Add small random variations to metrics
+                    signal_2_4_var = float(np.random.normal(0, 2))
+                    signal_5_var = float(np.random.normal(0, 1.5))
+                    
+                    # 2.4 GHz data point
+                    rows.append({
+                        'channel': channel_2_4,
+                        'band': '2.4 GHz',
+                        'day_of_week': int(np.random.randint(0, 7)),
+                        'month': int(np.random.randint(1, 13)),
+                        'day': int(np.random.randint(1, 29)),
+                        'time': f"{minute//60:02d}:{minute%60:02d}",
+                        'minutes_since_midnight': int(minute),
+                        'avg_signal_strength': signal_2_4 + signal_2_4_var,
+                        'network_count': networks_2_4,
+                        'total_client_count': clients_2_4,
+                        'avg_retransmission_count': retrans_2_4,
+                        'avg_lost_packets': lost_2_4,
+                        'avg_airtime': airtime_2_4
+                    })
+                    
+                    # 5 GHz data point
+                    rows.append({
+                        'channel': channel_5,
+                        'band': '5 GHz',
+                        'day_of_week': int(np.random.randint(0, 7)),
+                        'month': int(np.random.randint(1, 13)),
+                        'day': int(np.random.randint(1, 29)),
+                        'time': f"{minute//60:02d}:{minute%60:02d}",
+                        'minutes_since_midnight': int(minute),
+                        'avg_signal_strength': signal_5 + signal_5_var,
+                        'network_count': networks_5,
+                        'total_client_count': clients_5,
+                        'avg_retransmission_count': retrans_5,
+                        'avg_lost_packets': lost_5,
+                        'avg_airtime': airtime_5
+                    })
             
             # Create DataFrame and add to dictionary
             df = pd.DataFrame(rows)

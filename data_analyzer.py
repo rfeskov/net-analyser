@@ -413,7 +413,7 @@ class WiFiChannelAnalyzer:
                 band = period['band']
                 if band not in final_recommendations[point]:
                     final_recommendations[point][band] = {
-                        'recommended_channel': period['channel']
+                        'recommended_channel': int(period['channel'])
                     }
         
         # Resolve conflicts
@@ -437,9 +437,9 @@ class WiFiChannelAnalyzer:
             if alt_channels1 and alt_channels2:
                 # Use the alternative with better load score
                 if alt_channels1[0]['load_score'] < alt_channels2[0]['load_score']:
-                    final_recommendations[point1][band]['recommended_channel'] = alt_channels1[0]['channel']
+                    final_recommendations[point1][band]['recommended_channel'] = int(alt_channels1[0]['channel'])
                 else:
-                    final_recommendations[point2][band]['recommended_channel'] = alt_channels2[0]['channel']
+                    final_recommendations[point2][band]['recommended_channel'] = int(alt_channels2[0]['channel'])
         
         return final_recommendations
 
@@ -458,7 +458,7 @@ class WiFiChannelAnalyzer:
         """
         # Get all channels for the band
         if band == '2.4 GHz':
-            channels = list(range(1, 15))
+            channels = list(range(1, 14))
         else:  # 5 GHz
             channels = [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112,
                        116, 120, 124, 128, 132, 136, 140, 144, 149, 153,
@@ -472,14 +472,17 @@ class WiFiChannelAnalyzer:
             
             # Check if channel conflicts with any current recommendation
             conflicts = False
-            for point, analysis in current_recommendations.items():
-                if band in analysis:
-                    if self._channels_too_close(channel, analysis[band]['recommended_channel'], band):
+            for point, recommendations in current_recommendations.items():
+                if band in recommendations:
+                    if self._channels_too_close(channel, recommendations[band]['recommended_channel'], band):
                         conflicts = True
                         break
             
             if not conflicts:
-                valid_channels.append(channel)
+                valid_channels.append({
+                    'channel': channel,
+                    'load_score': 0.0  # Placeholder load score
+                })
         
         return valid_channels
 
@@ -531,21 +534,21 @@ class WiFiChannelAnalyzer:
                 print("-" * 20)
                 
                 for period in periods:
-                    start_time = f"{period['start_time'] // 60:02d}:{period['start_time'] % 60:02d}"
-                    end_time = f"{period['end_time'] // 60:02d}:{period['end_time'] % 60:02d}"
-                    duration = (period['end_time'] - period['start_time']) // 60  # in hours
+                    start_time = f"{int(period['start_time']) // 60:02d}:{int(period['start_time']) % 60:02d}"
+                    end_time = f"{int(period['end_time']) // 60:02d}:{int(period['end_time']) % 60:02d}"
+                    duration = (int(period['end_time']) - int(period['start_time'])) // 60  # in hours
                     
                     print(f"\nPeriod: {start_time} - {end_time} (Duration: {duration} hours)")
-                    print(f"  Channel: {period['channel']}")
-                    print(f"  Load Score: {period['load_score']:.2f}")
-                    print(f"  Stability: {period['stability']:.2f}")
+                    print(f"  Channel: {int(period['channel'])}")
+                    print(f"  Load Score: {float(period['load_score']):.2f}")
+                    print(f"  Stability: {float(period['stability']):.2f}")
                     print("  Metrics:")
-                    print(f"    Signal Strength: {period['metrics']['avg_signal_strength']:.1f} dBm")
-                    print(f"    Networks: {period['metrics']['network_count']:.1f}")
-                    print(f"    Clients: {period['metrics']['client_count']:.1f}")
-                    print(f"    Retransmissions: {period['metrics']['retransmission_count']:.1f}")
-                    print(f"    Lost Packets: {period['metrics']['lost_packets']:.1f}")
-                    print(f"    Airtime: {period['metrics']['airtime']:.1f} ms")
+                    print(f"    Signal Strength: {float(period['metrics']['avg_signal_strength']):.1f} dBm")
+                    print(f"    Networks: {float(period['metrics']['network_count']):.1f}")
+                    print(f"    Clients: {float(period['metrics']['client_count']):.1f}")
+                    print(f"    Retransmissions: {float(period['metrics']['retransmission_count']):.1f}")
+                    print(f"    Lost Packets: {float(period['metrics']['lost_packets']):.1f}")
+                    print(f"    Airtime: {float(period['metrics']['airtime']):.1f} ms")
         
         # Print conflicts if any
         if analysis_results['conflicts']:
@@ -554,7 +557,7 @@ class WiFiChannelAnalyzer:
             for conflict in analysis_results['conflicts']:
                 print(f"\nConflict between {conflict['point1']} and {conflict['point2']}:")
                 print(f"  Band: {conflict['band']}")
-                print(f"  Channels: {conflict['channel1']} and {conflict['channel2']}")
+                print(f"  Channels: {int(conflict['channel1'])} and {int(conflict['channel2'])}")
         
         # Print final recommendations
         print("\nFinal Recommendations:")
@@ -562,7 +565,7 @@ class WiFiChannelAnalyzer:
         for point, recommendations in analysis_results['final_recommendations'].items():
             print(f"\n{point}:")
             for band, band_rec in recommendations.items():
-                print(f"  {band}: Channel {band_rec['recommended_channel']}")
+                print(f"  {band}: Channel {int(band_rec['recommended_channel'])}")
 
     def generate_test_data(self, num_points: int = 3) -> Dict[str, pd.DataFrame]:
         """

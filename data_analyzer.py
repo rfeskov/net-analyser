@@ -174,49 +174,107 @@ class WiFiChannelAnalyzer:
         """
         self.logger.info("Analyzing point data")
         
-        # Calculate metrics
-        metrics = self.calculate_channel_metrics(df)
+        # Sort by time
+        df = df.sort_values('minutes_since_midnight')
         
-        # Find best channel for each band
-        recommendations = {}
+        # Calculate metrics for each time period
+        time_periods = []
+        current_period = {
+            'start_time': df.iloc[0]['minutes_since_midnight'],
+            'end_time': None,
+            'recommendations': {}
+        }
+        
+        # Minimum duration for a channel recommendation (in minutes)
+        min_duration = 60  # 1 hour minimum
+        
+        # Analyze each band separately
         for band in ['2.4 GHz', '5 GHz']:
-            band_metrics = metrics[metrics['band'] == band].copy()
-            
-            if band_metrics.empty:
+            band_df = df[df['band'] == band].copy()
+            if band_df.empty:
                 continue
+                
+            # Calculate metrics for each time point
+            time_metrics = []
+            for time in band_df['minutes_since_midnight'].unique():
+                time_df = band_df[band_df['minutes_since_midnight'] == time]
+                metrics = self.calculate_channel_metrics(time_df)
+                time_metrics.append({
+                    'time': time,
+                    'metrics': metrics
+                })
             
-            # Sort by load score and stability
-            band_metrics['combined_score'] = (
-                band_metrics['load_score_mean'] * (1 + band_metrics['load_score_variance'])
-            )
-            band_metrics = band_metrics.sort_values('combined_score')
+            # Find stable channel periods
+            current_channel = None
+            period_start = None
+            period_metrics = None
             
-            # Get best channel
-            best_channel = band_metrics.iloc[0]
+            for i, time_point in enumerate(time_metrics):
+                metrics = time_point['metrics']
+                if metrics.empty:
+                    continue
+                
+                # Sort by combined score
+                metrics['combined_score'] = (
+                    metrics['load_score_mean'] * (1 + metrics['load_score_variance'])
+                )
+                metrics = metrics.sort_values('combined_score')
+                
+                best_channel = int(metrics.iloc[0]['channel'])
+                best_score = float(metrics.iloc[0]['combined_score'])
+                
+                if current_channel is None:
+                    # First time point
+                    current_channel = best_channel
+                    period_start = time_point['time']
+                    period_metrics = metrics.iloc[0]
+                elif best_channel != current_channel:
+                    # Channel change detected
+                    if time_point['time'] - period_start >= min_duration:
+                        # Only record change if period was long enough
+                        time_periods.append({
+                            'band': band,
+                            'start_time': period_start,
+                            'end_time': time_point['time'],
+                            'channel': current_channel,
+                            'load_score': float(period_metrics['load_score_mean']),
+                            'stability': float(1 - period_metrics['load_score_variance']),
+                            'metrics': {
+                                'avg_signal_strength': float(period_metrics['avg_signal_strength']),
+                                'network_count': float(period_metrics['network_count']),
+                                'client_count': float(period_metrics['total_client_count']),
+                                'retransmission_count': float(period_metrics['avg_retransmission_count']),
+                                'lost_packets': float(period_metrics['avg_lost_packets']),
+                                'airtime': float(period_metrics['avg_airtime'])
+                            }
+                        })
+                        current_channel = best_channel
+                        period_start = time_point['time']
+                        period_metrics = metrics.iloc[0]
+                    else:
+                        # Ignore short-term changes
+                        continue
             
-            # Determine load classification
-            load_class = 'low'
-            if best_channel['load_score_mean'] > self.load_thresholds['medium']:
-                load_class = 'high'
-            elif best_channel['load_score_mean'] > self.load_thresholds['low']:
-                load_class = 'medium'
-            
-            recommendations[band] = {
-                'recommended_channel': int(best_channel['channel']),
-                'load_score': float(best_channel['load_score_mean']),
-                'stability': float(1 - best_channel['load_score_variance']),
-                'load_classification': load_class,
-                'metrics': {
-                    'avg_signal_strength': float(best_channel['avg_signal_strength']),
-                    'network_count': float(best_channel['network_count']),
-                    'client_count': float(best_channel['total_client_count']),
-                    'retransmission_count': float(best_channel['avg_retransmission_count']),
-                    'lost_packets': float(best_channel['avg_lost_packets']),
-                    'airtime': float(best_channel['avg_airtime'])
-                }
-            }
+            # Add final period
+            if current_channel is not None:
+                time_periods.append({
+                    'band': band,
+                    'start_time': period_start,
+                    'end_time': band_df['minutes_since_midnight'].max(),
+                    'channel': current_channel,
+                    'load_score': float(period_metrics['load_score_mean']),
+                    'stability': float(1 - period_metrics['load_score_variance']),
+                    'metrics': {
+                        'avg_signal_strength': float(period_metrics['avg_signal_strength']),
+                        'network_count': float(period_metrics['network_count']),
+                        'client_count': float(period_metrics['total_client_count']),
+                        'retransmission_count': float(period_metrics['avg_retransmission_count']),
+                        'lost_packets': float(period_metrics['avg_lost_packets']),
+                        'airtime': float(period_metrics['avg_airtime'])
+                    }
+                })
         
-        return recommendations
+        return {'time_periods': time_periods}
 
     def analyze_multiple_points(self, data_dict: Dict[str, pd.DataFrame]) -> Dict:
         """
@@ -416,12 +474,35 @@ class WiFiChannelAnalyzer:
             print(f"\nPoint: {point}")
             print("-" * 30)
             
-            for band, band_analysis in analysis.items():
+            # Group periods by band
+            band_periods = {}
+            for period in analysis['time_periods']:
+                band = period['band']
+                if band not in band_periods:
+                    band_periods[band] = []
+                band_periods[band].append(period)
+            
+            # Print periods for each band
+            for band, periods in band_periods.items():
                 print(f"\n{band}:")
-                print(f"  Recommended Channel: {band_analysis['recommended_channel']}")
-                print(f"  Load Score: {band_analysis['load_score']:.2f}")
-                print(f"  Stability: {band_analysis['stability']:.2f}")
-                print(f"  Load Classification: {band_analysis['load_classification']}")
+                print("-" * 20)
+                
+                for period in periods:
+                    start_time = f"{period['start_time'] // 60:02d}:{period['start_time'] % 60:02d}"
+                    end_time = f"{period['end_time'] // 60:02d}:{period['end_time'] % 60:02d}"
+                    duration = (period['end_time'] - period['start_time']) // 60  # in hours
+                    
+                    print(f"\nPeriod: {start_time} - {end_time} (Duration: {duration} hours)")
+                    print(f"  Channel: {period['channel']}")
+                    print(f"  Load Score: {period['load_score']:.2f}")
+                    print(f"  Stability: {period['stability']:.2f}")
+                    print("  Metrics:")
+                    print(f"    Signal Strength: {period['metrics']['avg_signal_strength']:.1f} dBm")
+                    print(f"    Networks: {period['metrics']['network_count']:.1f}")
+                    print(f"    Clients: {period['metrics']['client_count']:.1f}")
+                    print(f"    Retransmissions: {period['metrics']['retransmission_count']:.1f}")
+                    print(f"    Lost Packets: {period['metrics']['lost_packets']:.1f}")
+                    print(f"    Airtime: {period['metrics']['airtime']:.1f} ms")
         
         # Print conflicts if any
         if analysis_results['conflicts']:

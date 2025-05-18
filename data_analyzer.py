@@ -363,8 +363,8 @@ class WiFiChannelAnalyzer:
                         continue
                     
                     # Get current channels for each point
-                    point1_channel = point1_bands[band][0]['channel']  # Use first period
-                    point2_channel = point2_bands[band][0]['channel']  # Use first period
+                    point1_channel = int(point1_bands[band][0]['channel'])  # Use first period
+                    point2_channel = int(point2_bands[band][0]['channel'])  # Use first period
                     
                     # Check if channels are too close
                     if self._channels_too_close(point1_channel, point2_channel, band):
@@ -594,22 +594,22 @@ class WiFiChannelAnalyzer:
             # Generate data for each minute of the day
             for minute in range(0, 1440, 5):  # 5-minute intervals
                 # 2.4 GHz band
-                channel_2_4 = np.random.choice(channels_2_4)
-                signal_2_4 = np.random.normal(-65, 10)  # Mean -65 dBm, std 10
-                networks_2_4 = np.random.randint(1, 5)
-                clients_2_4 = np.random.randint(1, 15)
-                retrans_2_4 = np.random.randint(5, 30)
-                lost_2_4 = np.random.randint(1, 10)
-                airtime_2_4 = np.random.randint(100, 500)
+                channel_2_4 = int(np.random.choice(channels_2_4))
+                signal_2_4 = float(np.random.normal(-65, 10))  # Mean -65 dBm, std 10
+                networks_2_4 = int(np.random.randint(1, 5))
+                clients_2_4 = int(np.random.randint(1, 15))
+                retrans_2_4 = int(np.random.randint(5, 30))
+                lost_2_4 = int(np.random.randint(1, 10))
+                airtime_2_4 = int(np.random.randint(100, 500))
                 
                 rows.append({
                     'channel': channel_2_4,
                     'band': '2.4 GHz',
-                    'day_of_week': np.random.randint(0, 7),
-                    'month': np.random.randint(1, 13),
-                    'day': np.random.randint(1, 29),
+                    'day_of_week': int(np.random.randint(0, 7)),
+                    'month': int(np.random.randint(1, 13)),
+                    'day': int(np.random.randint(1, 29)),
                     'time': f"{minute//60:02d}:{minute%60:02d}",
-                    'minutes_since_midnight': minute,
+                    'minutes_since_midnight': int(minute),
                     'avg_signal_strength': signal_2_4,
                     'network_count': networks_2_4,
                     'total_client_count': clients_2_4,
@@ -619,22 +619,22 @@ class WiFiChannelAnalyzer:
                 })
                 
                 # 5 GHz band
-                channel_5 = np.random.choice(channels_5)
-                signal_5 = np.random.normal(-55, 8)  # Mean -55 dBm, std 8
-                networks_5 = np.random.randint(1, 8)
-                clients_5 = np.random.randint(1, 40)
-                retrans_5 = np.random.randint(5, 25)
-                lost_5 = np.random.randint(1, 8)
-                airtime_5 = np.random.randint(200, 600)
+                channel_5 = int(np.random.choice(channels_5))
+                signal_5 = float(np.random.normal(-55, 8))  # Mean -55 dBm, std 8
+                networks_5 = int(np.random.randint(1, 8))
+                clients_5 = int(np.random.randint(1, 40))
+                retrans_5 = int(np.random.randint(5, 25))
+                lost_5 = int(np.random.randint(1, 8))
+                airtime_5 = int(np.random.randint(200, 600))
                 
                 rows.append({
                     'channel': channel_5,
                     'band': '5 GHz',
-                    'day_of_week': np.random.randint(0, 7),
-                    'month': np.random.randint(1, 13),
-                    'day': np.random.randint(1, 29),
+                    'day_of_week': int(np.random.randint(0, 7)),
+                    'month': int(np.random.randint(1, 13)),
+                    'day': int(np.random.randint(1, 29)),
                     'time': f"{minute//60:02d}:{minute%60:02d}",
-                    'minutes_since_midnight': minute,
+                    'minutes_since_midnight': int(minute),
                     'avg_signal_strength': signal_5,
                     'network_count': networks_5,
                     'total_client_count': clients_5,

@@ -115,6 +115,9 @@ class WiFiChannelAnalyzer:
         """
         self.logger.info("Calculating channel metrics")
         
+        # Calculate load scores for each row
+        df['load_score'] = df.apply(self._calculate_load_score, axis=1)
+        
         # Group by channel and calculate metrics
         metrics = df.groupby(['channel', 'band']).agg({
             'avg_signal_strength': 'mean',
@@ -122,21 +125,15 @@ class WiFiChannelAnalyzer:
             'total_client_count': 'mean',
             'avg_retransmission_count': 'mean',
             'avg_lost_packets': 'mean',
-            'avg_airtime': 'mean'
+            'avg_airtime': 'mean',
+            'load_score': ['mean', 'var']  # Calculate both mean and variance
         }).reset_index()
         
-        # Calculate load score variance for stability analysis
-        load_scores = []
-        for _, row in df.iterrows():
-            score = self._calculate_load_score(row)
-            load_scores.append(score)
-        
-        df['load_score'] = load_scores
-        stability = df.groupby(['channel', 'band'])['load_score'].var().reset_index()
-        stability.columns = ['channel', 'band', 'load_score_variance']
-        
-        # Merge stability metrics
-        metrics = metrics.merge(stability, on=['channel', 'band'])
+        # Flatten the multi-level columns
+        metrics.columns = ['channel', 'band', 
+                         'avg_signal_strength', 'network_count', 'total_client_count',
+                         'avg_retransmission_count', 'avg_lost_packets', 'avg_airtime',
+                         'load_score_mean', 'load_score_variance']
         
         return metrics
 
@@ -190,7 +187,7 @@ class WiFiChannelAnalyzer:
             
             # Sort by load score and stability
             band_metrics['combined_score'] = (
-                band_metrics['load_score'] * (1 + band_metrics['load_score_variance'])
+                band_metrics['load_score_mean'] * (1 + band_metrics['load_score_variance'])
             )
             band_metrics = band_metrics.sort_values('combined_score')
             
@@ -199,14 +196,14 @@ class WiFiChannelAnalyzer:
             
             # Determine load classification
             load_class = 'low'
-            if best_channel['load_score'] > self.load_thresholds['medium']:
+            if best_channel['load_score_mean'] > self.load_thresholds['medium']:
                 load_class = 'high'
-            elif best_channel['load_score'] > self.load_thresholds['low']:
+            elif best_channel['load_score_mean'] > self.load_thresholds['low']:
                 load_class = 'medium'
             
             recommendations[band] = {
                 'recommended_channel': int(best_channel['channel']),
-                'load_score': float(best_channel['load_score']),
+                'load_score': float(best_channel['load_score_mean']),
                 'stability': float(1 - best_channel['load_score_variance']),
                 'load_classification': load_class,
                 'metrics': {

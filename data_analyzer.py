@@ -330,21 +330,43 @@ class WiFiChannelAnalyzer:
             for j in range(i + 1, len(points)):
                 point1, point2 = points[i], points[j]
                 
+                # Get current recommendations for each point
+                point1_periods = point_analyses[point1]['time_periods']
+                point2_periods = point_analyses[point2]['time_periods']
+                
+                # Group periods by band
+                point1_bands = {}
+                point2_bands = {}
+                
+                for period in point1_periods:
+                    band = period['band']
+                    if band not in point1_bands:
+                        point1_bands[band] = []
+                    point1_bands[band].append(period)
+                
+                for period in point2_periods:
+                    band = period['band']
+                    if band not in point2_bands:
+                        point2_bands[band] = []
+                    point2_bands[band].append(period)
+                
+                # Check for conflicts in each band
                 for band in ['2.4 GHz', '5 GHz']:
-                    if band not in point_analyses[point1] or band not in point_analyses[point2]:
+                    if band not in point1_bands or band not in point2_bands:
                         continue
                     
-                    channel1 = point_analyses[point1][band]['recommended_channel']
-                    channel2 = point_analyses[point2][band]['recommended_channel']
+                    # Get current channels for each point
+                    point1_channel = point1_bands[band][0]['channel']  # Use first period
+                    point2_channel = point2_bands[band][0]['channel']  # Use first period
                     
                     # Check if channels are too close
-                    if self._channels_too_close(channel1, channel2, band):
+                    if self._channels_too_close(point1_channel, point2_channel, band):
                         conflicts.append({
                             'point1': point1,
                             'point2': point2,
                             'band': band,
-                            'channel1': channel1,
-                            'channel2': channel2
+                            'channel1': point1_channel,
+                            'channel2': point2_channel
                         })
         
         return conflicts
@@ -377,9 +399,15 @@ class WiFiChannelAnalyzer:
         """
         final_recommendations = {}
         
-        # Start with original recommendations
+        # Start with current recommendations
         for point, analysis in point_analyses.items():
-            final_recommendations[point] = analysis.copy()
+            final_recommendations[point] = {}
+            for period in analysis['time_periods']:
+                band = period['band']
+                if band not in final_recommendations[point]:
+                    final_recommendations[point][band] = {
+                        'recommended_channel': period['channel']
+                    }
         
         # Resolve conflicts
         for conflict in conflicts:
@@ -388,12 +416,12 @@ class WiFiChannelAnalyzer:
             
             # Get alternative channels for both points
             alt_channels1 = self._get_alternative_channels(
-                point_analyses[point1][band]['recommended_channel'],
+                final_recommendations[point1][band]['recommended_channel'],
                 band,
                 final_recommendations
             )
             alt_channels2 = self._get_alternative_channels(
-                point_analyses[point2][band]['recommended_channel'],
+                final_recommendations[point2][band]['recommended_channel'],
                 band,
                 final_recommendations
             )
@@ -524,10 +552,10 @@ class WiFiChannelAnalyzer:
         # Print final recommendations
         print("\nFinal Recommendations:")
         print("-" * 30)
-        for point, analysis in analysis_results['final_recommendations'].items():
+        for point, recommendations in analysis_results['final_recommendations'].items():
             print(f"\n{point}:")
-            for band, band_analysis in analysis.items():
-                print(f"  {band}: Channel {band_analysis['recommended_channel']}")
+            for band, band_rec in recommendations.items():
+                print(f"  {band}: Channel {band_rec['recommended_channel']}")
 
 
 def main():

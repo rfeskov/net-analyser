@@ -350,12 +350,17 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
             hourlyCount[i] > 0 ? Math.round(sum / hourlyCount[i]) : 0
         );
         
+        // Создаем массив с null для нулевых значений
+        const dataWithGaps = averageClients.map(value => value === 0 ? null : value);
+        
         datasets.push({
             label: `Канал ${channel}`,
-            data: averageClients,
-            backgroundColor: CHANNEL_COLORS[channel] || '#000000',
+            data: dataWithGaps,
             borderColor: CHANNEL_COLORS[channel] || '#000000',
-            borderWidth: 1,
+            backgroundColor: CHANNEL_COLORS[channel] || '#000000',
+            borderWidth: 2,
+            stepped: true,
+            fill: false,
             hidden: false
         });
     });
@@ -370,7 +375,7 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
     
     // Create new chart
     chart = new Chart(canvas, {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: hourLabels,
             datasets: datasets

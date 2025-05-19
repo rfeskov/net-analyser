@@ -16,26 +16,28 @@ app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 # Templates
 templates = Jinja2Templates(directory="frontend/templates")
 
-# Mock data for initial development
-MOCK_POINTS = [
-    {"id": 1, "name": "AP-1", "type": "real", "location": "Floor 1"},
-    {"id": 2, "name": "AP-2", "type": "real", "location": "Floor 2"},
-    {"id": 3, "name": "Virtual-1", "type": "virtual", "location": "Floor 1"}
-]
+# Load analysis results
+def load_analysis_results():
+    try:
+        with open("analysis_results.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Analysis results file not found")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Invalid JSON in analysis results file")
 
-MOCK_PREDICTIONS = {
-    "points": [
-        {
-            "id": 1,
-            "name": "AP-1",
-            "predictions": [
-                {"timestamp": "2024-01-01T00:00:00", "channel": 1, "load": 0.3},
-                {"timestamp": "2024-01-01T01:00:00", "channel": 6, "load": 0.4},
-                {"timestamp": "2024-01-01T02:00:00", "channel": 11, "load": 0.5}
-            ]
-        }
-    ]
-}
+# Get points from analysis results
+def get_points_from_analysis():
+    analysis_data = load_analysis_results()
+    points = []
+    for point_id, point_data in analysis_data["point_analyses"].items():
+        points.append({
+            "id": point_id,
+            "name": point_id,
+            "type": "real",
+            "location": "Unknown"  # You might want to add location data to your analysis results
+        })
+    return points
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -45,22 +47,43 @@ async def root(request: Request):
 @app.get("/api/points")
 async def get_points():
     """Get list of available Wi-Fi access points."""
-    return MOCK_POINTS
+    return get_points_from_analysis()
 
 @app.get("/api/predictions")
-async def get_predictions(point_id: Optional[int] = None):
+async def get_predictions(point_id: Optional[str] = None):
     """Get predictions for a specific point or all points."""
-    if point_id:
-        # Filter predictions for specific point
-        point_predictions = next(
-            (p for p in MOCK_PREDICTIONS["points"] if p["id"] == point_id),
-            None
-        )
-        if not point_predictions:
-            raise HTTPException(status_code=404, detail="Point not found")
-        return point_predictions
+    analysis_data = load_analysis_results()
     
-    return MOCK_PREDICTIONS
+    if point_id:
+        if point_id not in analysis_data["point_analyses"]:
+            raise HTTPException(status_code=404, detail="Point not found")
+        
+        point_data = analysis_data["point_analyses"][point_id]
+        return {
+            "id": point_id,
+            "name": point_id,
+            "time_periods": point_data["time_periods"],
+            "recommendations": analysis_data["final_recommendations"][point_id]
+        }
+    
+    # Return all points data
+    return {
+        "points": [
+            {
+                "id": point_id,
+                "name": point_id,
+                "time_periods": point_data["time_periods"],
+                "recommendations": analysis_data["final_recommendations"][point_id]
+            }
+            for point_id, point_data in analysis_data["point_analyses"].items()
+        ]
+    }
+
+@app.get("/api/conflicts")
+async def get_conflicts():
+    """Get list of channel conflicts between points."""
+    analysis_data = load_analysis_results()
+    return analysis_data["conflicts"]
 
 @app.get("/api/settings")
 async def get_settings():

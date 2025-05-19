@@ -1,0 +1,298 @@
+{
+  "point_analyses": {
+    "test_point_1": {
+      "time_periods": [
+        {
+          "band": "2.4 GHz",
+          "start_time": "5",
+          "end_time": "175",
+          "channel": 12,
+          "load_score": 62.92925441507181,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -55.72544150718063,
+            "network_count": 1.0,
+            "client_count": 10.0,
+            "retransmission_count": 13.0,
+            "lost_packets": 5.0,
+            "airtime": 186.0
+          }
+        },
+        {
+          "band": "2.4 GHz",
+          "start_time": "175",
+          "end_time": "1438",
+          "channel": 10,
+          "load_score": 47.604374262304255,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -67.83742623042522,
+            "network_count": 3.0,
+            "client_count": 9.0,
+            "retransmission_count": 5.0,
+            "lost_packets": 4.0,
+            "airtime": 463.0
+          }
+        },
+        {
+          "band": "5 GHz",
+          "start_time": "5",
+          "end_time": "175",
+          "channel": 144,
+          "load_score": 138.92626176315324,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -50.226176315323855,
+            "network_count": 5.0,
+            "client_count": 29.0,
+            "retransmission_count": 18.0,
+            "lost_packets": 6.0,
+            "airtime": 212.0
+          }
+        },
+        {
+          "band": "5 GHz",
+          "start_time": "175",
+          "end_time": "242",
+          "channel": 36,
+          "load_score": 163.18393567509727,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -54.99356750972984,
+            "network_count": 3.0,
+            "client_count": 37.0,
+            "retransmission_count": 22.0,
+            "lost_packets": 2.0,
+            "airtime": 317.0
+          }
+        },
+        {
+          "band": "5 GHz",
+          "start_time": "242",
+          "end_time": "1438",
+          "channel": 44,
+          "load_score": 63.099148649935444,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -36.91486499354449,
+            "network_count": 4.0,
+            "client_count": 10.0,
+            "retransmission_count": 12.0,
+            "lost_packets": 1.0,
+            "airtime": 365.0
+          }
+        }
+      ]
+    },
+    "test_point_2": {
+      "time_periods": [
+        {
+          "band": "2.4 GHz",
+          "start_time": "0",
+          "end_time": "984",
+          "channel": 6,
+          "load_score": 57.57722014964771,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -68.3220149647713,
+            "network_count": 2.0,
+            "client_count": 12.0,
+            "retransmission_count": 7.0,
+            "lost_packets": 3.0,
+            "airtime": 447.0
+          }
+        },
+        {
+          "band": "2.4 GHz",
+          "start_time": "984",
+          "end_time": "1365",
+          "channel": 2,
+          "load_score": 92.4816785906999,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -70.36785906998878,
+            "network_count": 4.0,
+            "client_count": 8.0,
+            "retransmission_count": 28.0,
+            "lost_packets": 4.0,
+            "airtime": 389.0
+          }
+        },
+        {
+          "band": "2.4 GHz",
+          "start_time": "1365",
+          "end_time": "1430",
+          "channel": 4,
+          "load_score": 75.12973656843421,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -74.37365684342168,
+            "network_count": 2.0,
+            "client_count": 12.0,
+            "retransmission_count": 16.0,
+            "lost_packets": 3.0,
+            "airtime": 193.0
+          }
+        },
+        {
+          "band": "5 GHz",
+          "start_time": "0",
+          "end_time": "1365",
+          "channel": 44,
+          "load_score": 109.18493047398653,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -67.09304739865279,
+            "network_count": 7.0,
+            "client_count": 23.0,
+            "retransmission_count": 10.0,
+            "lost_packets": 6.0,
+            "airtime": 257.0
+          }
+        },
+        {
+          "band": "5 GHz",
+          "start_time": "1365",
+          "end_time": "1430",
+          "channel": 52,
+          "load_score": 106.36504637777907,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -38.70463777790768,
+            "network_count": 4.0,
+            "client_count": 23.0,
+            "retransmission_count": 14.0,
+            "lost_packets": 1.0,
+            "airtime": 489.0
+          }
+        }
+      ]
+    },
+    "test_point_3": {
+      "time_periods": [
+        {
+          "band": "2.4 GHz",
+          "start_time": "3",
+          "end_time": "1300",
+          "channel": 6,
+          "load_score": 113.17573104231755,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -58.573104231754904,
+            "network_count": 4.0,
+            "client_count": 14.0,
+            "retransmission_count": 29.0,
+            "lost_packets": 5.0,
+            "airtime": 295.0
+          }
+        },
+        {
+          "band": "2.4 GHz",
+          "start_time": "1300",
+          "end_time": "1362",
+          "channel": 9,
+          "load_score": 43.85833507197658,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -59.6335071976584,
+            "network_count": 3.0,
+            "client_count": 7.0,
+            "retransmission_count": 8.0,
+            "lost_packets": 1.0,
+            "airtime": 131.0
+          }
+        },
+        {
+          "band": "2.4 GHz",
+          "start_time": "1362",
+          "end_time": "1437",
+          "channel": 8,
+          "load_score": 88.4449219002972,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -59.89219002972046,
+            "network_count": 3.0,
+            "client_count": 14.0,
+            "retransmission_count": 19.0,
+            "lost_packets": 2.0,
+            "airtime": 423.0
+          }
+        },
+        {
+          "band": "5 GHz",
+          "start_time": "3",
+          "end_time": "66",
+          "channel": 149,
+          "load_score": 134.63819093817952,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -48.21909381795095,
+            "network_count": 3.0,
+            "client_count": 29.0,
+            "retransmission_count": 17.0,
+            "lost_packets": 7.0,
+            "airtime": 578.0
+          }
+        },
+        {
+          "band": "5 GHz",
+          "start_time": "66",
+          "end_time": "1437",
+          "channel": 36,
+          "load_score": 36.628241327585506,
+          "stability": 1.0,
+          "metrics": {
+            "avg_signal_strength": -48.824132758550746,
+            "network_count": 1.0,
+            "client_count": 4.0,
+            "retransmission_count": 8.0,
+            "lost_packets": 6.0,
+            "airtime": 570.0
+          }
+        }
+      ]
+    }
+  },
+  "conflicts": [
+    {
+      "point1": "test_point_1",
+      "point2": "test_point_3",
+      "band": "5 GHz",
+      "channel1": 144,
+      "channel2": 149
+    },
+    {
+      "point1": "test_point_2",
+      "point2": "test_point_3",
+      "band": "2.4 GHz",
+      "channel1": 6,
+      "channel2": 6
+    }
+  ],
+  "final_recommendations": {
+    "test_point_1": {
+      "2.4 GHz": {
+        "recommended_channel": 12
+      },
+      "5 GHz": {
+        "recommended_channel": 144
+      }
+    },
+    "test_point_2": {
+      "2.4 GHz": {
+        "recommended_channel": 6
+      },
+      "5 GHz": {
+        "recommended_channel": 44
+      }
+    },
+    "test_point_3": {
+      "2.4 GHz": {
+        "recommended_channel": 1
+      },
+      "5 GHz": {
+        "recommended_channel": 64
+      }
+    }
+  }
+}

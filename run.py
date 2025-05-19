@@ -14,7 +14,7 @@ def main():
     # Run the FastAPI application
     uvicorn.run(
         "backend.main:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8000,
         reload=True,
         reload_dirs=[str(backend_dir)]

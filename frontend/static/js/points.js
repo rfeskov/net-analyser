@@ -49,17 +49,82 @@ function updatePointsGrid(points) {
                 </div>
             </div>
             <div class="mt-4 pt-4 border-t border-gray-100">
-                <a 
-                    href="/points/${point.id}"
-                    class="block w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200 text-center"
+                <button 
+                    onclick="openSettingsModal('${point.id}')"
+                    class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
                 >
-                    Подробнее
-                </a>
+                    Настройки
+                </button>
             </div>
         `;
         
         grid.appendChild(card);
     });
+}
+
+// Modal functionality
+let currentPointId = null;
+
+function openSettingsModal(pointId) {
+    currentPointId = pointId;
+    const modal = document.getElementById('settings-modal');
+    const title = document.getElementById('modal-title');
+    title.textContent = `Настройки точки доступа ${pointId}`;
+    
+    // Show modal
+    modal.classList.remove('hidden');
+    
+    // Add event listeners for channel mode changes
+    document.getElementById('channel-mode-24').addEventListener('change', function(e) {
+        document.getElementById('channel-24').disabled = e.target.value === 'auto';
+    });
+    
+    document.getElementById('channel-mode-5').addEventListener('change', function(e) {
+        document.getElementById('channel-5').disabled = e.target.value === 'auto';
+    });
+}
+
+function closeSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    modal.classList.add('hidden');
+    currentPointId = null;
+}
+
+async function saveSettings() {
+    if (!currentPointId) return;
+    
+    const settings = {
+        pointId: currentPointId,
+        status: document.getElementById('point-status').checked,
+        band24: {
+            channelMode: document.getElementById('channel-mode-24').value,
+            channel: document.getElementById('channel-24').value,
+            power: document.getElementById('power-24').value
+        },
+        band5: {
+            channelMode: document.getElementById('channel-mode-5').value,
+            channel: document.getElementById('channel-5').value,
+            power: document.getElementById('power-5').value
+        }
+    };
+    
+    try {
+        // Here you would typically send the settings to the backend
+        console.log('Saving settings:', settings);
+        // await fetch('/api/points/' + currentPointId + '/settings', {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify(settings)
+        // });
+        
+        closeSettingsModal();
+        // Reload points to show updated status
+        loadPoints();
+    } catch (error) {
+        console.error('Error saving settings:', error);
+    }
 }
 
 // Initialize the page

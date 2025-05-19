@@ -19,10 +19,6 @@ const channelSignalCanvas24 = document.getElementById('channel-signal-chart-2.4'
 const channelSignalCanvas5 = document.getElementById('channel-signal-chart-5');
 const channelPerformanceTable24 = document.getElementById('channel-performance-table-2.4');
 const channelPerformanceTable5 = document.getElementById('channel-performance-table-5');
-const dashboardTab = document.getElementById('dashboard-tab');
-const pointsTab = document.getElementById('points-tab');
-const dashboardContent = document.getElementById('dashboard-content');
-const pointsContent = document.getElementById('points-content');
 
 // Фиксированные цвета для каналов
 const CHANNEL_COLORS = {
@@ -636,17 +632,6 @@ function setupEventListeners() {
             currentPoint = pointId;
             loadPointMetrics(pointId);
         }
-    });
-    
-    // Tab navigation
-    dashboardTab.addEventListener('click', (e) => {
-        e.preventDefault();
-        showTab('dashboard');
-    });
-    
-    pointsTab.addEventListener('click', (e) => {
-        e.preventDefault();
-        showTab('points');
     });
 }
 

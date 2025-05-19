@@ -46,18 +46,44 @@ async def root(request: Request):
     """Serve the main dashboard page."""
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/points", response_class=HTMLResponse)
+async def points_page(request: Request):
+    """Serve the points page."""
+    return templates.TemplateResponse("points.html", {"request": request})
+
 @app.get("/api/points")
 async def get_points():
     """Get list of available points."""
     points = []
     for point_id, data in analysis_results["point_analyses"].items():
-        # Get the first time period to extract basic info
-        first_period = data["time_periods"][0]
-        points.append({
-            "id": point_id,
-            "name": point_id,
-            "band": first_period["band"]
-        })
+        # Get the latest time period to extract current info
+        latest_period = data["time_periods"][-1]
+        
+        # Get channel load data to extract current metrics
+        try:
+            df = load_csv_data(point_id)
+            latest_data = df.iloc[-1]  # Get the latest record
+            
+            points.append({
+                "id": point_id,
+                "name": point_id,
+                "band": "2.4 GHz & 5 GHz",  # Both bands
+                "is_online": True,
+                "clients_count": int(latest_data["total_client_count"]),
+                "channel": str(latest_data["channel"]),
+                "signal_strength": int(float(latest_data["avg_signal_strength"]))  # Round to integer
+            })
+        except Exception as e:
+            points.append({
+                "id": point_id,
+                "name": point_id,
+                "band": "2.4 GHz & 5 GHz",
+                "is_online": True,
+                "clients_count": 0,
+                "channel": latest_period["channel"],
+                "signal_strength": None
+            })
+    
     return points
 
 @app.get("/api/points/{point_id}")

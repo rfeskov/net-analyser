@@ -88,6 +88,7 @@ async function init() {
     await loadPoints();
     await loadSummary();
     setupEventListeners();
+    showTab('dashboard'); // Show dashboard tab by default
 }
 
 // Load available points
@@ -106,9 +107,72 @@ async function loadPoints() {
             option.textContent = `${point.name} (${point.band})`;
             pointSelect.appendChild(option);
         });
+
+        // Update points grid
+        updatePointsGrid(points);
     } catch (error) {
         console.error('Ошибка загрузки точек:', error);
     }
+}
+
+// Update points grid with cards
+function updatePointsGrid(points) {
+    const grid = document.getElementById('points-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    points.forEach(point => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow duration-200';
+        
+        // Determine status color
+        const statusColor = point.is_online ? 'bg-green-500' : 'bg-red-500';
+        
+        card.innerHTML = `
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">${point.name}</h3>
+                    <p class="text-sm text-gray-500">${point.band}</p>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-block w-3 h-3 rounded-full ${statusColor} mr-2"></span>
+                    <span class="text-sm text-gray-600">${point.is_online ? 'Онлайн' : 'Оффлайн'}</span>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">Клиентов:</span>
+                    <span class="text-gray-900 font-medium">${point.clients_count || 0}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">Канал:</span>
+                    <span class="text-gray-900 font-medium">${point.channel || 'Н/Д'}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">Уровень сигнала:</span>
+                    <span class="text-gray-900 font-medium">${point.signal_strength ? point.signal_strength + ' dBm' : 'Н/Д'}</span>
+                </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-100">
+                <button 
+                    class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
+                    onclick="selectPoint('${point.id}')"
+                >
+                    Подробнее
+                </button>
+            </div>
+        `;
+        
+        grid.appendChild(card);
+    });
+}
+
+// Select point from card
+function selectPoint(pointId) {
+    pointSelect.value = pointId;
+    loadPointMetrics(pointId);
+    showTab('points');
 }
 
 // Load summary data
@@ -283,25 +347,32 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
     
     // Создаем контейнер для графика и чекбоксов
     const container = canvas.parentElement;
+    
+    // Удаляем только существующий wrapper, если он есть
+    const existingWrapper = container.querySelector('.flex.gap-8');
+    if (existingWrapper) {
+        existingWrapper.remove();
+    }
+    
+    // Восстанавливаем оригинальный canvas
+    container.appendChild(canvas);
+    
     const wrapper = document.createElement('div');
-    wrapper.className = 'flex gap-4';
+    wrapper.className = 'flex gap-8';
     
     // Создаем контейнер для графика
     const chartContainer = document.createElement('div');
     chartContainer.className = 'flex-grow';
+    chartContainer.style.minHeight = '300px';
     chartContainer.appendChild(canvas);
     
     // Создаем контейнер для чекбоксов
     const toggleContainer = document.createElement('div');
-    toggleContainer.className = 'channel-toggles w-32';
+    toggleContainer.className = 'channel-toggles';
+    toggleContainer.style.width = '150px';
     toggleContainer.style.maxHeight = '300px';
     toggleContainer.style.overflowY = 'auto';
-    
-    // Очищаем предыдущие чекбоксы
-    const existingToggles = container.querySelector('.channel-toggles');
-    if (existingToggles) {
-        existingToggles.remove();
-    }
+    toggleContainer.style.flexShrink = '0';
     
     // Создаем массивы для часов (0-23)
     const hours = Array.from({length: 24}, (_, i) => i);
@@ -314,7 +385,7 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
     Object.entries(bandData).forEach(([channel, data]) => {
         // Создаем чекбокс для канала
         const label = document.createElement('label');
-        label.className = 'flex items-center space-x-2 text-sm mb-2';
+        label.className = 'flex items-center space-x-2 text-sm mb-2 whitespace-nowrap';
         label.style.color = CHANNEL_COLORS[channel] || '#000000';
         
         const checkbox = document.createElement('input');
@@ -350,17 +421,12 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
             hourlyCount[i] > 0 ? Math.round(sum / hourlyCount[i]) : 0
         );
         
-        // Создаем массив с null для нулевых значений
-        const dataWithGaps = averageClients.map(value => value === 0 ? null : value);
-        
         datasets.push({
             label: `Канал ${channel}`,
-            data: dataWithGaps,
-            borderColor: CHANNEL_COLORS[channel] || '#000000',
+            data: averageClients,
             backgroundColor: CHANNEL_COLORS[channel] || '#000000',
-            borderWidth: 2,
-            stepped: true,
-            fill: false,
+            borderColor: 'white',
+            borderWidth: 1,
             hidden: false
         });
     });
@@ -369,13 +435,12 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
     wrapper.appendChild(chartContainer);
     wrapper.appendChild(toggleContainer);
     
-    // Очищаем и добавляем новый контейнер
-    container.innerHTML = '';
+    // Добавляем новый контейнер
     container.appendChild(wrapper);
     
     // Create new chart
     chart = new Chart(canvas, {
-        type: 'line',
+        type: 'bar',
         data: {
             labels: hourLabels,
             datasets: datasets
@@ -387,8 +452,15 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
                 mode: 'index',
                 intersect: false,
             },
+            layout: {
+                padding: {
+                    top: 30,
+                    bottom: 30
+                }
+            },
             scales: {
                 x: {
+                    stacked: true,
                     title: {
                         display: true,
                         text: 'Время'
@@ -399,6 +471,7 @@ function updateSingleLoadChart(bandData, canvas, chart, band) {
                     }
                 },
                 y: {
+                    stacked: true,
                     title: {
                         display: true,
                         text: 'Количество клиентов'
@@ -474,9 +547,11 @@ function updateSingleSignalChart(bandData, canvas, chart, band) {
         });
         
         // Вычисляем средние значения для каждого часа
-        const averageSignals = hourlySignals.map((sum, i) => 
-            hourlyCount[i] > 0 ? (sum / hourlyCount[i]).toFixed(1) : 0
-        );
+        const averageSignals = hourlySignals.map((sum, i) => {
+            if (hourlyCount[i] === 0) return null; // Возвращаем null для часов без данных
+            const avg = sum / hourlyCount[i];
+            return avg === 0 ? null : avg.toFixed(1); // Возвращаем null для нулевых значений
+        });
         
         datasets.push({
             label: `Канал ${channel}`,
@@ -485,7 +560,8 @@ function updateSingleSignalChart(bandData, canvas, chart, band) {
             backgroundColor: 'transparent',
             borderWidth: 2,
             tension: 0.1,
-            hidden: false
+            hidden: false,
+            spanGaps: true // Позволяет линиям проходить через пропуски
         });
     });
     
@@ -531,6 +607,7 @@ function updateSingleSignalChart(bandData, canvas, chart, band) {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
+                            if (context.parsed.y === null) return null;
                             return `${context.dataset.label}: ${context.parsed.y} dBm`;
                         }
                     }

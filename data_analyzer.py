@@ -610,8 +610,7 @@ class WiFiChannelAnalyzer:
                 start_time = max(0, min(1439, start_time + start_offset))
                 end_time = max(0, min(1439, end_time + end_offset))
                 
-                # 2.4 GHz band
-                channel_2_4 = int(np.random.choice(channels_2_4))
+                # Generate base metrics for 2.4 GHz band
                 base_signal_2_4 = float(np.random.normal(-65, 10))  # Mean -65 dBm, std 10
                 base_networks_2_4 = int(np.random.randint(1, 5))
                 base_clients_2_4 = int(np.random.randint(1, 15))
@@ -619,8 +618,7 @@ class WiFiChannelAnalyzer:
                 base_lost_2_4 = int(np.random.randint(1, 10))
                 base_airtime_2_4 = int(np.random.randint(100, 500))
                 
-                # 5 GHz band
-                channel_5 = int(np.random.choice(channels_5))
+                # Generate base metrics for 5 GHz band
                 base_signal_5 = float(np.random.normal(-55, 8))  # Mean -55 dBm, std 8
                 base_networks_5 = int(np.random.randint(1, 8))
                 base_clients_5 = int(np.random.randint(1, 40))
@@ -636,60 +634,136 @@ class WiFiChannelAnalyzer:
                 
                 # Generate data points for this period
                 for minute in range(start_time, end_time, 5):  # 5-minute intervals
-                    # Smooth random walk for client count
-                    clients_2_4 = max(1, min(30, clients_2_4 + np.random.normal(0, 0.5)))
-                    clients_5 = max(1, min(50, clients_5 + np.random.normal(0, 0.8)))
+                    # Smooth random walk for total client count
+                    total_clients_2_4 = max(1, min(30, clients_2_4 + np.random.normal(0, 0.5)))
+                    total_clients_5 = max(1, min(50, clients_5 + np.random.normal(0, 0.8)))
                     
                     # Smooth random walk for signal strength
                     signal_2_4 = max(-100, min(-30, signal_2_4 + np.random.normal(0, 0.3)))
-                    signal_5 = max(-100, min(-30, signal_5 + np.random.normal(0, 0.2)))
+                    # More gradual signal changes for 5 GHz
+                    signal_5 = max(-100, min(-30, signal_5 + np.random.normal(0, 0.15)))  # Reduced variation
                     
-                    # Calculate correlated metrics based on client count
-                    networks_2_4 = max(1, int(base_networks_2_4 + (clients_2_4 / 5)))
-                    networks_5 = max(1, int(base_networks_5 + (clients_5 / 8)))
+                    # Generate overlapping client distributions for 2.4 GHz
+                    channels_2_4_clients = {}
+                    remaining_clients = total_clients_2_4
                     
-                    retrans_2_4 = max(5, int(base_retrans_2_4 * (1 + clients_2_4 / 20)))
-                    retrans_5 = max(5, int(base_retrans_5 * (1 + clients_5 / 30)))
+                    # First, distribute clients to primary channel
+                    primary_channel = int(np.random.choice(channels_2_4))
+                    primary_clients = int(total_clients_2_4 * np.random.uniform(0.6, 0.8))  # Increased primary channel share
+                    channels_2_4_clients[primary_channel] = primary_clients
+                    remaining_clients -= primary_clients
                     
-                    lost_2_4 = max(1, int(base_lost_2_4 * (1 + clients_2_4 / 15)))
-                    lost_5 = max(1, int(base_lost_5 * (1 + clients_5 / 25)))
+                    # Then distribute remaining clients to nearby channels
+                    max_attempts = 5  # Reduced attempts
+                    attempts = 0
+                    while remaining_clients > 0 and attempts < max_attempts:
+                        # Get all possible nearby channels
+                        possible_channels = []
+                        for offset in [-1, 1]:  # Only immediate neighbors
+                            nearby_channel = primary_channel + offset
+                            if 1 <= nearby_channel <= 13 and nearby_channel not in channels_2_4_clients:
+                                possible_channels.append(nearby_channel)
+                        
+                        if possible_channels:
+                            # Choose a random channel from available ones
+                            nearby_channel = np.random.choice(possible_channels)
+                            channel_clients = min(remaining_clients, int(np.random.uniform(1, 3)))  # Reduced max clients per secondary channel
+                            channels_2_4_clients[nearby_channel] = channel_clients
+                            remaining_clients -= channel_clients
+                        
+                        attempts += 1
                     
-                    airtime_2_4 = max(100, int(base_airtime_2_4 * (1 + clients_2_4 / 10)))
-                    airtime_5 = max(200, int(base_airtime_5 * (1 + clients_5 / 20)))
+                    # If there are still remaining clients, add them to the primary channel
+                    if remaining_clients > 0:
+                        channels_2_4_clients[primary_channel] += remaining_clients
                     
-                    # 2.4 GHz data point
-                    rows.append({
-                        'channel': channel_2_4,
-                        'band': '2.4 GHz',
-                        'day_of_week': int(np.random.randint(0, 7)),
-                        'month': int(np.random.randint(1, 13)),
-                        'day': int(np.random.randint(1, 29)),
-                        'time': f"{minute//60:02d}:{minute%60:02d}",
-                        'minutes_since_midnight': int(minute),
-                        'avg_signal_strength': float(signal_2_4),
-                        'network_count': int(networks_2_4),
-                        'total_client_count': int(clients_2_4),
-                        'avg_retransmission_count': int(retrans_2_4),
-                        'avg_lost_packets': int(lost_2_4),
-                        'avg_airtime': int(airtime_2_4)
-                    })
+                    # Generate overlapping client distributions for 5 GHz
+                    channels_5_clients = {}
+                    remaining_clients = total_clients_5
                     
-                    # 5 GHz data point
-                    rows.append({
-                        'channel': channel_5,
-                        'band': '5 GHz',
-                        'day_of_week': int(np.random.randint(0, 7)),
-                        'month': int(np.random.randint(1, 13)),
-                        'day': int(np.random.randint(1, 29)),
-                        'time': f"{minute//60:02d}:{minute%60:02d}",
-                        'minutes_since_midnight': int(minute),
-                        'avg_signal_strength': float(signal_5),
-                        'network_count': int(networks_5),
-                        'total_client_count': int(clients_5),
-                        'avg_retransmission_count': int(retrans_5),
-                        'avg_lost_packets': int(lost_5),
-                        'avg_airtime': int(airtime_5)
-                    })
+                    # First, distribute clients to primary channel
+                    primary_channel = int(np.random.choice(channels_5))
+                    primary_clients = int(total_clients_5 * np.random.uniform(0.7, 0.9))  # Increased primary channel share
+                    channels_5_clients[primary_channel] = primary_clients
+                    remaining_clients -= primary_clients
+                    
+                    # Then distribute remaining clients to nearby channels
+                    max_attempts = 3  # Reduced attempts
+                    attempts = 0
+                    while remaining_clients > 0 and attempts < max_attempts:
+                        # Get all possible nearby channels
+                        possible_channels = []
+                        for offset in [-20, 20]:  # Only immediate neighbors
+                            nearby_channel = primary_channel + offset
+                            if nearby_channel in channels_5 and nearby_channel not in channels_5_clients:
+                                possible_channels.append(nearby_channel)
+                        
+                        if possible_channels:
+                            # Choose a random channel from available ones
+                            nearby_channel = np.random.choice(possible_channels)
+                            channel_clients = min(remaining_clients, int(np.random.uniform(1, 4)))  # Reduced max clients per secondary channel
+                            channels_5_clients[nearby_channel] = channel_clients
+                            remaining_clients -= channel_clients
+                        
+                        attempts += 1
+                    
+                    # If there are still remaining clients, add them to the primary channel
+                    if remaining_clients > 0:
+                        channels_5_clients[primary_channel] += remaining_clients
+                    
+                    # Generate data points for each channel with clients
+                    for channel, channel_clients in channels_2_4_clients.items():
+                        # Calculate correlated metrics based on client count
+                        networks = max(1, int(base_networks_2_4 + (channel_clients / 5)))
+                        retrans = max(5, int(base_retrans_2_4 * (1 + channel_clients / 20)))
+                        lost = max(1, int(base_lost_2_4 * (1 + channel_clients / 15)))
+                        airtime = max(100, int(base_airtime_2_4 * (1 + channel_clients / 10)))
+                        
+                        # Add small variation to signal strength for each channel
+                        channel_signal = signal_2_4 + np.random.normal(0, 2)
+                        
+                        rows.append({
+                            'channel': channel,
+                            'band': '2.4 GHz',
+                            'day_of_week': int(np.random.randint(0, 7)),
+                            'month': int(np.random.randint(1, 13)),
+                            'day': int(np.random.randint(1, 29)),
+                            'time': f"{minute//60:02d}:{minute%60:02d}",
+                            'minutes_since_midnight': int(minute),
+                            'avg_signal_strength': float(channel_signal),
+                            'network_count': int(networks),
+                            'total_client_count': int(channel_clients),
+                            'avg_retransmission_count': int(retrans),
+                            'avg_lost_packets': int(lost),
+                            'avg_airtime': int(airtime)
+                        })
+                    
+                    for channel, channel_clients in channels_5_clients.items():
+                        # Calculate correlated metrics based on client count
+                        networks = max(1, int(base_networks_5 + (channel_clients / 8)))
+                        retrans = max(5, int(base_retrans_5 * (1 + channel_clients / 30)))
+                        lost = max(1, int(base_lost_5 * (1 + channel_clients / 25)))
+                        airtime = max(200, int(base_airtime_5 * (1 + channel_clients / 20)))
+                        
+                        # Add very small variation to signal strength for each channel
+                        # More gradual changes for 5 GHz
+                        channel_signal = signal_5 + np.random.normal(0, 0.5)  # Reduced variation
+                        
+                        rows.append({
+                            'channel': channel,
+                            'band': '5 GHz',
+                            'day_of_week': int(np.random.randint(0, 7)),
+                            'month': int(np.random.randint(1, 13)),
+                            'day': int(np.random.randint(1, 29)),
+                            'time': f"{minute//60:02d}:{minute%60:02d}",
+                            'minutes_since_midnight': int(minute),
+                            'avg_signal_strength': float(channel_signal),
+                            'network_count': int(networks),
+                            'total_client_count': int(channel_clients),
+                            'avg_retransmission_count': int(retrans),
+                            'avg_lost_packets': int(lost),
+                            'avg_airtime': int(airtime)
+                        })
             
             # Create DataFrame and add to dictionary
             df = pd.DataFrame(rows)

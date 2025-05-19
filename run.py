@@ -2,14 +2,18 @@
 
 import uvicorn
 from pathlib import Path
+import sys
 
 def main():
     # Get the absolute path to the backend directory
     backend_dir = Path(__file__).parent / 'backend'
     
+    # Add backend directory to Python path
+    sys.path.append(str(backend_dir))
+    
     # Run the FastAPI application
     uvicorn.run(
-        "main:app",
+        "backend.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,

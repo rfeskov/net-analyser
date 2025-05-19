@@ -6,7 +6,6 @@ from fastapi import Request
 from pathlib import Path
 import json
 from typing import List, Dict, Optional
-import pandas as pd
 from datetime import datetime, timedelta
 
 app = FastAPI(title="Wi-Fi Monitoring and Prediction System")

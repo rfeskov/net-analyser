@@ -2,9 +2,11 @@
   import { Router, Link, Route } from "svelte-routing";
   import Main from "./Main.svelte";
   import Settings from "./Settings.svelte";
+
+  export let url = "";
 </script>
 
-<Router>
+<Router {url}>
   <nav class="bg-gray-800 text-white p-4">
     <div class="container mx-auto flex justify-between items-center">
       <Link to="/" class="text-xl font-bold">Wi-Fi Channel Optimizer</Link>

@@ -65,7 +65,7 @@
                 <div class="md:grid md:grid-cols-3 md:gap-6">
                     <div class="md:col-span-1">
                         <h3 class="text-lg font-medium leading-6 text-gray-900">Анализ изменений каналов</h3>
-                        <p class="mt-1 text-sm text-gray-500">График показывает эффективность каналов во времени.</p>
+                        <p class="mt-1 text-sm text-gray-500">График показывает изменения каналов во времени.</p>
                     </div>
                     <div class="mt-5 md:mt-0 md:col-span-2">
                         <div class="space-y-6">
@@ -81,6 +81,32 @@
                                     <canvas id="channel-analysis-chart-5"></canvas>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channel Load Analysis -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4 text-gray-900">Анализ загруженности каналов</h3>
+                <p class="text-sm text-gray-600 mb-4">Графики показывают количество клиентов и уровень помех для каждого канала по часам.</p>
+                <div class="grid grid-cols-1 gap-6">
+                    <div>
+                        <h4 class="text-md font-medium mb-2 text-gray-900">2.4 ГГц</h4>
+                        <div class="relative h-64">
+                            <canvas id="channel-load-chart-2.4"></canvas>
+                        </div>
+                        <div class="relative h-64 mt-4">
+                            <canvas id="channel-signal-chart-2.4"></canvas>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-md font-medium mb-2 text-gray-900">5 ГГц</h4>
+                        <div class="relative h-64">
+                            <canvas id="channel-load-chart-5"></canvas>
+                        </div>
+                        <div class="relative h-64 mt-4">
+                            <canvas id="channel-signal-chart-5"></canvas>
                         </div>
                     </div>
                 </div>

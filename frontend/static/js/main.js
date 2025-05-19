@@ -2,6 +2,10 @@
 let metricsChart = null;
 let channelAnalysisChart24 = null;
 let channelAnalysisChart5 = null;
+let channelLoadChart24 = null;
+let channelLoadChart5 = null;
+let channelSignalChart24 = null;
+let channelSignalChart5 = null;
 let currentPoint = null;
 
 // DOM Elements
@@ -9,6 +13,10 @@ const pointSelect = document.getElementById('point-select');
 const metricsChartCanvas = document.getElementById('predictions-chart');
 const channelAnalysisCanvas24 = document.getElementById('channel-analysis-chart-2.4');
 const channelAnalysisCanvas5 = document.getElementById('channel-analysis-chart-5');
+const channelLoadCanvas24 = document.getElementById('channel-load-chart-2.4');
+const channelLoadCanvas5 = document.getElementById('channel-load-chart-5');
+const channelSignalCanvas24 = document.getElementById('channel-signal-chart-2.4');
+const channelSignalCanvas5 = document.getElementById('channel-signal-chart-5');
 const channelPerformanceTable24 = document.getElementById('channel-performance-table-2.4');
 const channelPerformanceTable5 = document.getElementById('channel-performance-table-5');
 const dashboardTab = document.getElementById('dashboard-tab');
@@ -16,11 +24,63 @@ const pointsTab = document.getElementById('points-tab');
 const dashboardContent = document.getElementById('dashboard-content');
 const pointsContent = document.getElementById('points-content');
 
+// Фиксированные цвета для каналов
+const CHANNEL_COLORS = {
+    '1': '#FF5733',  // Красный
+    '2': '#33FF57',  // Зеленый
+    '3': '#3357FF',  // Синий
+    '4': '#F3FF33',  // Желтый
+    '5': '#FF33F3',  // Розовый
+    '6': '#33FFF3',  // Голубой
+    '7': '#F333FF',  // Фиолетовый
+    '8': '#FF8333',  // Оранжевый
+    '9': '#33FF83',  // Светло-зеленый
+    '10': '#8333FF', // Темно-фиолетовый
+    '11': '#FF3333', // Ярко-красный
+    '12': '#33FF33', // Ярко-зеленый
+    '13': '#3333FF', // Ярко-синий
+    '36': '#FF5733',
+    '40': '#33FF57',
+    '44': '#3357FF',
+    '48': '#F3FF33',
+    '52': '#FF33F3',
+    '56': '#33FFF3',
+    '60': '#F333FF',
+    '64': '#FF8333',
+    '100': '#33FF83',
+    '104': '#8333FF',
+    '108': '#FF3333',
+    '112': '#33FF33',
+    '116': '#3333FF',
+    '120': '#FF5733',
+    '124': '#33FF57',
+    '128': '#3357FF',
+    '132': '#F3FF33',
+    '136': '#FF33F3',
+    '140': '#33FFF3',
+    '144': '#F333FF',
+    '149': '#FF8333',
+    '153': '#33FF83',
+    '157': '#8333FF',
+    '161': '#FF3333',
+    '165': '#33FF33'
+};
+
 // Helper function to convert minutes to HH:MM format
 function minutesToTime(minutes) {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+}
+
+// Helper function to generate random color
+function getRandomColor() {
+    const letters = '0123456789ABCDEF';
+    let color = '#';
+    for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
 }
 
 // Initialize the application
@@ -91,19 +151,25 @@ function updateSummaryDisplay(summary) {
 // Load metrics for a point
 async function loadPointMetrics(pointId) {
     try {
-        const response = await fetch(`/api/points/${pointId}/metrics`);
-        const data = await response.json();
+        const [metricsResponse, loadResponse] = await Promise.all([
+            fetch(`/api/points/${pointId}/metrics`),
+            fetch(`/api/points/${pointId}/channel_load`)
+        ]);
         
-        // Split data by frequency band
+        const metricsData = await metricsResponse.json();
+        const loadData = await loadResponse.json();
+        
+        // Split metrics data by frequency band
         const data24 = {
-            time_periods: data.time_periods.filter(p => p.band === '2.4 GHz')
+            time_periods: metricsData.time_periods.filter(p => p.band === '2.4 GHz')
         };
         const data5 = {
-            time_periods: data.time_periods.filter(p => p.band === '5 GHz')
+            time_periods: metricsData.time_periods.filter(p => p.band === '5 GHz')
         };
         
         updateChannelAnalysis(data24, data5);
         updateChannelPerformanceTable(data24, data5);
+        updateChannelLoad(loadData);
     } catch (error) {
         console.error('Ошибка загрузки метрик:', error);
     }
@@ -195,6 +261,288 @@ function updateSingleTable(data, table) {
         `;
         table.appendChild(row);
     });
+}
+
+// Update channel load charts
+function updateChannelLoad(data) {
+    // Update 2.4 GHz charts
+    updateSingleLoadChart(data['2.4 GHz'], channelLoadCanvas24, channelLoadChart24, '2.4');
+    updateSingleSignalChart(data['2.4 GHz'], channelSignalCanvas24, channelSignalChart24, '2.4');
+    // Update 5 GHz charts
+    updateSingleLoadChart(data['5 GHz'], channelLoadCanvas5, channelLoadChart5, '5');
+    updateSingleSignalChart(data['5 GHz'], channelSignalCanvas5, channelSignalChart5, '5');
+}
+
+function updateSingleLoadChart(bandData, canvas, chart, band) {
+    if (!bandData) return;
+    
+    // Destroy existing chart if it exists
+    if (chart) {
+        chart.destroy();
+    }
+    
+    // Создаем контейнер для графика и чекбоксов
+    const container = canvas.parentElement;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex gap-4';
+    
+    // Создаем контейнер для графика
+    const chartContainer = document.createElement('div');
+    chartContainer.className = 'flex-grow';
+    chartContainer.appendChild(canvas);
+    
+    // Создаем контейнер для чекбоксов
+    const toggleContainer = document.createElement('div');
+    toggleContainer.className = 'channel-toggles w-32';
+    toggleContainer.style.maxHeight = '300px';
+    toggleContainer.style.overflowY = 'auto';
+    
+    // Очищаем предыдущие чекбоксы
+    const existingToggles = container.querySelector('.channel-toggles');
+    if (existingToggles) {
+        existingToggles.remove();
+    }
+    
+    // Создаем массивы для часов (0-23)
+    const hours = Array.from({length: 24}, (_, i) => i);
+    const hourLabels = hours.map(h => `${h.toString().padStart(2, '0')}:00`);
+    
+    // Prepare datasets for each channel
+    const datasets = [];
+    const channelStates = {};
+    
+    Object.entries(bandData).forEach(([channel, data]) => {
+        // Создаем чекбокс для канала
+        const label = document.createElement('label');
+        label.className = 'flex items-center space-x-2 text-sm mb-2';
+        label.style.color = CHANNEL_COLORS[channel] || '#000000';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        checkbox.className = 'channel-toggle';
+        checkbox.dataset.channel = channel;
+        
+        const span = document.createElement('span');
+        span.textContent = `Канал ${channel}`;
+        
+        label.appendChild(checkbox);
+        label.appendChild(span);
+        toggleContainer.appendChild(label);
+        
+        // Сохраняем состояние канала
+        channelStates[channel] = true;
+        
+        // Группируем данные по часам
+        const hourlyClients = new Array(24).fill(0);
+        const hourlyCount = new Array(24).fill(0);
+        
+        data.times.forEach((time, index) => {
+            const hour = Math.floor(time / 60);
+            if (hour >= 0 && hour < 24) {
+                hourlyClients[hour] += parseInt(data.clients[index]) || 0;
+                hourlyCount[hour]++;
+            }
+        });
+        
+        // Вычисляем средние значения для каждого часа
+        const averageClients = hourlyClients.map((sum, i) => 
+            hourlyCount[i] > 0 ? Math.round(sum / hourlyCount[i]) : 0
+        );
+        
+        datasets.push({
+            label: `Канал ${channel}`,
+            data: averageClients,
+            backgroundColor: CHANNEL_COLORS[channel] || '#000000',
+            borderColor: CHANNEL_COLORS[channel] || '#000000',
+            borderWidth: 1,
+            hidden: false
+        });
+    });
+    
+    // Собираем контейнер
+    wrapper.appendChild(chartContainer);
+    wrapper.appendChild(toggleContainer);
+    
+    // Очищаем и добавляем новый контейнер
+    container.innerHTML = '';
+    container.appendChild(wrapper);
+    
+    // Create new chart
+    chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: hourLabels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Время'
+                    },
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Количество клиентов'
+                    },
+                    min: 0,
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y} клиентов`;
+                        }
+                    }
+                },
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Добавляем обработчики событий для чекбоксов
+    toggleContainer.querySelectorAll('.channel-toggle').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const channel = e.target.dataset.channel;
+            const datasetIndex = datasets.findIndex(ds => ds.label === `Канал ${channel}`);
+            if (datasetIndex !== -1) {
+                chart.data.datasets[datasetIndex].hidden = !e.target.checked;
+                chart.update();
+            }
+        });
+    });
+    
+    // Update the global chart reference
+    if (band === '2.4') {
+        channelLoadChart24 = chart;
+    } else {
+        channelLoadChart5 = chart;
+    }
+}
+
+function updateSingleSignalChart(bandData, canvas, chart, band) {
+    if (!bandData) return;
+    
+    // Destroy existing chart if it exists
+    if (chart) {
+        chart.destroy();
+    }
+    
+    // Создаем массивы для часов (0-23)
+    const hours = Array.from({length: 24}, (_, i) => i);
+    const hourLabels = hours.map(h => `${h.toString().padStart(2, '0')}:00`);
+    
+    // Prepare datasets for each channel
+    const datasets = [];
+    
+    Object.entries(bandData).forEach(([channel, data]) => {
+        // Группируем данные по часам
+        const hourlySignals = new Array(24).fill(0);
+        const hourlyCount = new Array(24).fill(0);
+        
+        data.times.forEach((time, index) => {
+            const hour = Math.floor(time / 60);
+            if (hour >= 0 && hour < 24) {
+                hourlySignals[hour] += parseFloat(data.signal[index]) || 0;
+                hourlyCount[hour]++;
+            }
+        });
+        
+        // Вычисляем средние значения для каждого часа
+        const averageSignals = hourlySignals.map((sum, i) => 
+            hourlyCount[i] > 0 ? (sum / hourlyCount[i]).toFixed(1) : 0
+        );
+        
+        datasets.push({
+            label: `Канал ${channel}`,
+            data: averageSignals,
+            borderColor: CHANNEL_COLORS[channel] || '#000000',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            tension: 0.1,
+            hidden: false
+        });
+    });
+    
+    // Create new chart
+    chart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: hourLabels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Время'
+                    },
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Уровень помех (dBm)'
+                    },
+                    min: -100,
+                    max: 0,
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y} dBm`;
+                        }
+                    }
+                },
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Update the global chart reference
+    if (band === '2.4') {
+        channelSignalChart24 = chart;
+    } else {
+        channelSignalChart5 = chart;
+    }
 }
 
 // Setup event listeners

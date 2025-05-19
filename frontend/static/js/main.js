@@ -1,21 +1,32 @@
 // Global variables
-let predictionsChart = null;
+let metricsChart = null;
+let channelAnalysisChart24 = null;
+let channelAnalysisChart5 = null;
 let currentPoint = null;
 
 // DOM Elements
 const pointSelect = document.getElementById('point-select');
-const predictionsChartCanvas = document.getElementById('predictions-chart');
-const recommendationsTable = document.getElementById('recommendations-table');
+const metricsChartCanvas = document.getElementById('predictions-chart');
+const channelAnalysisCanvas24 = document.getElementById('channel-analysis-chart-2.4');
+const channelAnalysisCanvas5 = document.getElementById('channel-analysis-chart-5');
+const channelPerformanceTable24 = document.getElementById('channel-performance-table-2.4');
+const channelPerformanceTable5 = document.getElementById('channel-performance-table-5');
 const dashboardTab = document.getElementById('dashboard-tab');
-const settingsTab = document.getElementById('settings-tab');
 const pointsTab = document.getElementById('points-tab');
 const dashboardContent = document.getElementById('dashboard-content');
-const settingsContent = document.getElementById('settings-content');
 const pointsContent = document.getElementById('points-content');
+
+// Helper function to convert minutes to HH:MM format
+function minutesToTime(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+}
 
 // Initialize the application
 async function init() {
     await loadPoints();
+    await loadSummary();
     setupEventListeners();
 }
 
@@ -26,65 +37,109 @@ async function loadPoints() {
         const points = await response.json();
         
         // Clear existing options
-        pointSelect.innerHTML = '<option value="">Select a point...</option>';
+        pointSelect.innerHTML = '<option value="">Выберите точку...</option>';
         
         // Add points to select
         points.forEach(point => {
             const option = document.createElement('option');
             option.value = point.id;
-            option.textContent = `${point.name} (${point.type})`;
+            option.textContent = `${point.name} (${point.band})`;
             pointSelect.appendChild(option);
         });
     } catch (error) {
-        console.error('Error loading points:', error);
+        console.error('Ошибка загрузки точек:', error);
     }
 }
 
-// Load predictions for a point
-async function loadPredictions(pointId) {
+// Load summary data
+async function loadSummary() {
     try {
-        const response = await fetch(`/api/predictions?point_id=${pointId}`);
-        const data = await response.json();
-        updateChart(data);
-        updateRecommendationsTable(data);
+        const response = await fetch('/api/summary');
+        const summary = await response.json();
+        updateSummaryDisplay(summary);
     } catch (error) {
-        console.error('Error loading predictions:', error);
+        console.error('Ошибка загрузки сводки:', error);
     }
 }
 
-// Update the predictions chart
-function updateChart(data) {
-    const predictions = data.predictions;
+// Update summary display
+function updateSummaryDisplay(summary) {
+    const summaryContainer = document.getElementById('summary-content');
+    if (!summaryContainer) return;
+
+    summaryContainer.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-2 text-gray-900">Всего точек</h3>
+                <p class="text-2xl font-bold text-gray-900">${summary.total_points}</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-2 text-gray-900">Конфликты</h3>
+                <p class="text-2xl font-bold text-gray-900">${summary.total_conflicts}</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-2 text-gray-900 break-words">Распределение частот</h3>
+                <div class="space-y-1">
+                    <p class="text-sm text-gray-900">2.4 ГГц: ${summary.bands['2.4 GHz']}</p>
+                    <p class="text-sm text-gray-900">5 ГГц: ${summary.bands['5 GHz']}</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Load metrics for a point
+async function loadPointMetrics(pointId) {
+    try {
+        const response = await fetch(`/api/points/${pointId}/metrics`);
+        const data = await response.json();
+        
+        // Split data by frequency band
+        const data24 = {
+            time_periods: data.time_periods.filter(p => p.band === '2.4 GHz')
+        };
+        const data5 = {
+            time_periods: data.time_periods.filter(p => p.band === '5 GHz')
+        };
+        
+        updateChannelAnalysis(data24, data5);
+        updateChannelPerformanceTable(data24, data5);
+    } catch (error) {
+        console.error('Ошибка загрузки метрик:', error);
+    }
+}
+
+// Update the channel analysis charts
+function updateChannelAnalysis(data24, data5) {
+    // Update 2.4 GHz chart
+    updateSingleChart(data24, channelAnalysisCanvas24, channelAnalysisChart24, '2.4');
+    // Update 5 GHz chart
+    updateSingleChart(data5, channelAnalysisCanvas5, channelAnalysisChart5, '5');
+}
+
+function updateSingleChart(data, canvas, chart, band) {
+    const timePeriods = data.time_periods;
     
     // Prepare data for Chart.js
-    const timestamps = predictions.map(p => new Date(p.timestamp));
-    const channels = predictions.map(p => p.channel);
-    const loads = predictions.map(p => p.load);
+    const timestamps = timePeriods.map(p => minutesToTime(p.start_time));
+    const channels = timePeriods.map(p => p.channel);
     
     // Destroy existing chart if it exists
-    if (predictionsChart) {
-        predictionsChart.destroy();
+    if (chart) {
+        chart.destroy();
     }
     
     // Create new chart
-    predictionsChart = new Chart(predictionsChartCanvas, {
+    chart = new Chart(canvas, {
         type: 'line',
         data: {
             labels: timestamps,
             datasets: [
                 {
-                    label: 'Channel',
+                    label: 'Канал',
                     data: channels,
                     borderColor: 'rgb(75, 192, 192)',
-                    tension: 0.1,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Load',
-                    data: loads,
-                    borderColor: 'rgb(255, 99, 132)',
-                    tension: 0.1,
-                    yAxisID: 'y1'
+                    tension: 0.1
                 }
             ]
         },
@@ -98,60 +153,47 @@ function updateChart(data) {
                 y: {
                     type: 'linear',
                     display: true,
-                    position: 'left',
                     title: {
                         display: true,
-                        text: 'Channel'
-                    }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: 'Load'
-                    },
-                    grid: {
-                        drawOnChartArea: false
+                        text: 'Канал'
                     }
                 }
             }
         }
     });
+    
+    // Update the global chart reference
+    if (band === '2.4') {
+        channelAnalysisChart24 = chart;
+    } else {
+        channelAnalysisChart5 = chart;
+    }
 }
 
-// Update the recommendations table
-function updateRecommendationsTable(data) {
-    const predictions = data.predictions;
+// Update the channel performance tables
+function updateChannelPerformanceTable(data24, data5) {
+    updateSingleTable(data24, channelPerformanceTable24);
+    updateSingleTable(data5, channelPerformanceTable5);
+}
+
+function updateSingleTable(data, table) {
+    const timePeriods = data.time_periods;
     
     // Clear existing rows
-    recommendationsTable.innerHTML = '';
+    table.innerHTML = '';
     
     // Add new rows
-    predictions.forEach((prediction, index) => {
+    timePeriods.forEach(period => {
         const row = document.createElement('tr');
-        
-        // Get current and next channel
-        const currentChannel = index > 0 ? predictions[index - 1].channel : prediction.channel;
-        const nextChannel = prediction.channel;
-        
         row.innerHTML = `
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${new Date(prediction.timestamp).toLocaleString()}
+                ${minutesToTime(period.start_time)} - ${minutesToTime(period.end_time)}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${currentChannel}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${nextChannel}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${(prediction.load * 100).toFixed(1)}%
+                ${period.channel}
             </td>
         `;
-        
-        recommendationsTable.appendChild(row);
+        table.appendChild(row);
     });
 }
 
@@ -162,7 +204,7 @@ function setupEventListeners() {
         const pointId = e.target.value;
         if (pointId) {
             currentPoint = pointId;
-            loadPredictions(pointId);
+            loadPointMetrics(pointId);
         }
     });
     
@@ -170,11 +212,6 @@ function setupEventListeners() {
     dashboardTab.addEventListener('click', (e) => {
         e.preventDefault();
         showTab('dashboard');
-    });
-    
-    settingsTab.addEventListener('click', (e) => {
-        e.preventDefault();
-        showTab('settings');
     });
     
     pointsTab.addEventListener('click', (e) => {
@@ -187,14 +224,11 @@ function setupEventListeners() {
 function showTab(tabName) {
     // Hide all content
     dashboardContent.classList.add('hidden');
-    settingsContent.classList.add('hidden');
     pointsContent.classList.add('hidden');
     
     // Remove active state from all tabs
     dashboardTab.classList.remove('border-indigo-500', 'text-gray-900');
     dashboardTab.classList.add('border-transparent', 'text-gray-500');
-    settingsTab.classList.remove('border-indigo-500', 'text-gray-900');
-    settingsTab.classList.add('border-transparent', 'text-gray-500');
     pointsTab.classList.remove('border-indigo-500', 'text-gray-900');
     pointsTab.classList.add('border-transparent', 'text-gray-500');
     
@@ -204,11 +238,6 @@ function showTab(tabName) {
             dashboardContent.classList.remove('hidden');
             dashboardTab.classList.remove('border-transparent', 'text-gray-500');
             dashboardTab.classList.add('border-indigo-500', 'text-gray-900');
-            break;
-        case 'settings':
-            settingsContent.classList.remove('hidden');
-            settingsTab.classList.remove('border-transparent', 'text-gray-500');
-            settingsTab.classList.add('border-indigo-500', 'text-gray-900');
             break;
         case 'points':
             pointsContent.classList.remove('hidden');

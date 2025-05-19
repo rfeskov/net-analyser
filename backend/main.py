@@ -8,7 +8,7 @@ import json
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 
-app = FastAPI(title="Wi-Fi Monitoring and Prediction System")
+app = FastAPI(title="Wi-Fi Network Analysis System")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
@@ -26,19 +26,6 @@ def load_analysis_results():
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Invalid JSON in analysis results file")
 
-# Get points from analysis results
-def get_points_from_analysis():
-    analysis_data = load_analysis_results()
-    points = []
-    for point_id, point_data in analysis_data["point_analyses"].items():
-        points.append({
-            "id": point_id,
-            "name": point_id,
-            "type": "real",
-            "location": "Unknown"  # You might want to add location data to your analysis results
-        })
-    return points
-
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Serve the main dashboard page."""
@@ -46,37 +33,59 @@ async def root(request: Request):
 
 @app.get("/api/points")
 async def get_points():
-    """Get list of available Wi-Fi access points."""
-    return get_points_from_analysis()
-
-@app.get("/api/predictions")
-async def get_predictions(point_id: Optional[str] = None):
-    """Get predictions for a specific point or all points."""
+    """Get list of available Wi-Fi access points with their basic information."""
     analysis_data = load_analysis_results()
+    points = []
     
-    if point_id:
-        if point_id not in analysis_data["point_analyses"]:
-            raise HTTPException(status_code=404, detail="Point not found")
-        
-        point_data = analysis_data["point_analyses"][point_id]
-        return {
+    for point_id, point_data in analysis_data["point_analyses"].items():
+        # Get the first time period to extract basic info
+        first_period = point_data["time_periods"][0]
+        points.append({
             "id": point_id,
             "name": point_id,
-            "time_periods": point_data["time_periods"],
-            "recommendations": analysis_data["final_recommendations"][point_id]
-        }
+            "band": first_period["band"],
+            "channel": first_period["channel"],
+            "load_score": first_period["load_score"],
+            "stability": first_period["stability"]
+        })
     
-    # Return all points data
+    return points
+
+@app.get("/api/points/{point_id}")
+async def get_point_details(point_id: str):
+    """Get detailed information for a specific point."""
+    analysis_data = load_analysis_results()
+    
+    if point_id not in analysis_data["point_analyses"]:
+        raise HTTPException(status_code=404, detail="Point not found")
+    
+    point_data = analysis_data["point_analyses"][point_id]
+    recommendations = analysis_data["final_recommendations"][point_id]
+    
     return {
-        "points": [
-            {
-                "id": point_id,
-                "name": point_id,
-                "time_periods": point_data["time_periods"],
-                "recommendations": analysis_data["final_recommendations"][point_id]
-            }
-            for point_id, point_data in analysis_data["point_analyses"].items()
-        ]
+        "id": point_id,
+        "time_periods": point_data["time_periods"],
+        "recommendations": recommendations
+    }
+
+@app.get("/api/points/{point_id}/metrics")
+async def get_point_metrics(point_id: str, band: Optional[str] = None):
+    """Get metrics for a specific point, optionally filtered by band."""
+    analysis_data = load_analysis_results()
+    
+    if point_id not in analysis_data["point_analyses"]:
+        raise HTTPException(status_code=404, detail="Point not found")
+    
+    point_data = analysis_data["point_analyses"][point_id]
+    time_periods = point_data["time_periods"]
+    
+    if band:
+        time_periods = [period for period in time_periods if period["band"] == band]
+    
+    return {
+        "id": point_id,
+        "band": band,
+        "time_periods": time_periods
     }
 
 @app.get("/api/conflicts")
@@ -85,20 +94,67 @@ async def get_conflicts():
     analysis_data = load_analysis_results()
     return analysis_data["conflicts"]
 
-@app.get("/api/settings")
-async def get_settings():
-    """Get current system settings."""
-    return {
-        "prediction_period": 24,  # hours
-        "virtual_points_enabled": True,
-        "update_interval": 5  # minutes
-    }
+@app.get("/api/recommendations")
+async def get_recommendations():
+    """Get channel recommendations for all points."""
+    analysis_data = load_analysis_results()
+    return analysis_data["final_recommendations"]
 
-@app.post("/api/settings")
-async def update_settings(settings: Dict):
-    """Update system settings."""
-    # In a real implementation, this would save settings to a file or database
-    return {"status": "success", "message": "Settings updated"}
+@app.get("/api/recommendations/{point_id}")
+async def get_point_recommendations(point_id: str):
+    """Get channel recommendations for a specific point."""
+    analysis_data = load_analysis_results()
+    
+    if point_id not in analysis_data["final_recommendations"]:
+        raise HTTPException(status_code=404, detail="Point not found")
+    
+    return analysis_data["final_recommendations"][point_id]
+
+@app.get("/api/summary")
+async def get_summary():
+    """Get a summary of the network analysis."""
+    analysis_data = load_analysis_results()
+    
+    summary = {
+        "total_points": len(analysis_data["point_analyses"]),
+        "total_conflicts": len(analysis_data["conflicts"]),
+        "bands": {
+            "2.4 GHz": 0,
+            "5 GHz": 0
+        },
+        "points": []
+    }
+    
+    for point_id, point_data in analysis_data["point_analyses"].items():
+        point_summary = {
+            "id": point_id,
+            "bands": set(),
+            "channels": set(),
+            "avg_load_score": 0,
+            "avg_stability": 0
+        }
+        
+        total_load_score = 0
+        total_stability = 0
+        period_count = 0
+        
+        for period in point_data["time_periods"]:
+            point_summary["bands"].add(period["band"])
+            point_summary["channels"].add(period["channel"])
+            total_load_score += period["load_score"]
+            total_stability += period["stability"]
+            period_count += 1
+            
+            summary["bands"][period["band"]] += 1
+        
+        point_summary["avg_load_score"] = total_load_score / period_count
+        point_summary["avg_stability"] = total_stability / period_count
+        point_summary["bands"] = list(point_summary["bands"])
+        point_summary["channels"] = list(point_summary["channels"])
+        
+        summary["points"].append(point_summary)
+    
+    return summary
 
 if __name__ == "__main__":
     import uvicorn

@@ -52,6 +52,10 @@ async def points_page(request: Request):
     """Serve the points page."""
     return templates.TemplateResponse("points.html", {"request": request})
 
+@app.get("/profile")
+async def read_profile():
+    return FileResponse("frontend/templates/profile.html")
+
 @app.get("/api/points")
 async def get_points():
     """Get list of available points."""

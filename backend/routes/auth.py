@@ -1,0 +1,147 @@
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
+from typing import Optional
+import jwt
+from datetime import datetime, timedelta
+import json
+import os
+from pathlib import Path
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# JWT settings
+SECRET_KEY = "your-secret-key"  # В продакшене используйте безопасный ключ
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# OAuth2 scheme
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Models
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: Optional[str] = None
+
+class User(BaseModel):
+    email: str
+    password: str
+
+class PasswordChange(BaseModel):
+    newPassword: str
+
+# User data file path
+USER_DATA_FILE = Path("frontend/static/data/user_data.json")
+
+def ensure_user_data_file():
+    """Ensure user data file exists with default admin user"""
+    try:
+        if not USER_DATA_FILE.exists():
+            logger.info(f"Creating user data file at {USER_DATA_FILE}")
+            USER_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+            default_data = {
+                "users": {
+                    "admin@example.com": {
+                        "password": "admin123",  # В продакшене используйте хеширование
+                        "role": "admin"
+                    }
+                }
+            }
+            with open(USER_DATA_FILE, "w") as f:
+                json.dump(default_data, f, indent=4)
+            logger.info("User data file created successfully")
+        else:
+            logger.info(f"User data file already exists at {USER_DATA_FILE}")
+    except Exception as e:
+        logger.error(f"Error creating user data file: {e}")
+        raise
+
+def get_user(email: str):
+    """Get user from data file"""
+    try:
+        ensure_user_data_file()
+        with open(USER_DATA_FILE, "r") as f:
+            data = json.load(f)
+            user = data["users"].get(email)
+            logger.info(f"Looking up user {email}: {'Found' if user else 'Not found'}")
+            return user
+    except Exception as e:
+        logger.error(f"Error getting user: {e}")
+        return None
+
+def verify_password(plain_password: str, stored_password: str):
+    """Verify password (in production, use proper password hashing)"""
+    return plain_password == stored_password
+
+def create_access_token(data: dict):
+    """Create JWT token"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    """Get current user from token"""
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        token_data = TokenData(email=email)
+    except jwt.JWTError:
+        raise credentials_exception
+    user = get_user(email=token_data.email)
+    if user is None:
+        raise credentials_exception
+    return user
+
+@router.post("/api/auth/login", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    """Login endpoint"""
+    logger.info(f"Login attempt for user: {form_data.username}")
+    user = get_user(form_data.username)
+    if not user or not verify_password(form_data.password, user["password"]):
+        logger.warning(f"Failed login attempt for user: {form_data.username}")
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": form_data.username})
+    logger.info(f"Successful login for user: {form_data.username}")
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/api/auth/change-password")
+async def change_password(
+    password_change: PasswordChange,
+    current_user: dict = Depends(get_current_user)
+):
+    """Change password endpoint"""
+    try:
+        with open(USER_DATA_FILE, "r") as f:
+            data = json.load(f)
+        
+        # Update password
+        data["users"][current_user["email"]]["password"] = password_change.newPassword
+        
+        with open(USER_DATA_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+        
+        return {"message": "Password changed successfully"}
+    except Exception as e:
+        logger.error(f"Error changing password: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) 

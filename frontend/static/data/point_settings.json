@@ -5,12 +5,12 @@
             "status": false,
             "band24": {
                 "channelMode": "manual",
-                "channel": "7",
+                "channel": "9",
                 "power": "75"
             },
             "band5": {
                 "channelMode": "auto",
-                "channel": "44",
+                "channel": "36",
                 "power": "25"
             }
         },
@@ -19,11 +19,11 @@
             "status": false,
             "band24": {
                 "channelMode": "manual",
-                "channel": "1",
-                "power": "75"
+                "channel": "3",
+                "power": "50"
             },
             "band5": {
-                "channelMode": "manual",
+                "channelMode": "auto",
                 "channel": "64",
                 "power": "100"
             }

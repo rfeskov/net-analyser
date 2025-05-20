@@ -1,42 +1,94 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if user is authenticated
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        window.location.href = '/login';
+        return;
+    }
+
     // Get form elements
     const newPasswordInput = document.getElementById('new-password');
     const confirmPasswordInput = document.getElementById('confirm-password');
     const saveButton = document.getElementById('save-button');
+    const logoutButton = document.getElementById('logout-button');
     const successNotification = document.getElementById('success-notification');
+    const errorNotification = document.getElementById('error-notification');
 
     // Add event listeners
     if (saveButton) {
         saveButton.addEventListener('click', handleSave);
     }
 
+    if (logoutButton) {
+        logoutButton.addEventListener('click', handleLogout);
+    }
+
     // Handle save button click
-    function handleSave() {
+    async function handleSave() {
         // Validate passwords
         if (newPasswordInput && confirmPasswordInput) {
             if (newPasswordInput.value !== confirmPasswordInput.value) {
-                alert('Пароли не совпадают');
+                showError('Пароли не совпадают');
                 return;
             }
 
             if (newPasswordInput.value.length < 8) {
-                alert('Пароль должен содержать минимум 8 символов');
+                showError('Пароль должен содержать минимум 8 символов');
                 return;
             }
 
-            // Here you would typically make an API call to update the password
-            showSuccessNotification();
-            resetForm();
+            try {
+                const response = await fetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        newPassword: newPasswordInput.value
+                    })
+                });
+
+                if (response.ok) {
+                    showSuccess();
+                    resetForm();
+                } else {
+                    showError('Ошибка при изменении пароля');
+                }
+            } catch (error) {
+                console.error('Error changing password:', error);
+                showError('Ошибка при изменении пароля');
+            }
         }
     }
 
+    // Handle logout
+    function handleLogout() {
+        localStorage.removeItem('authToken');
+        window.location.href = '/login';
+    }
+
     // Show success notification
-    function showSuccessNotification() {
+    function showSuccess() {
         if (successNotification) {
             successNotification.classList.remove('hidden');
             setTimeout(() => {
                 successNotification.classList.add('hidden');
-            }, 3000); // Hide after 3 seconds
+            }, 3000);
+        }
+    }
+
+    // Show error notification
+    function showError(message) {
+        if (errorNotification) {
+            const errorText = errorNotification.querySelector('span');
+            if (errorText) {
+                errorText.textContent = message;
+            }
+            errorNotification.classList.remove('hidden');
+            setTimeout(() => {
+                errorNotification.classList.add('hidden');
+            }, 3000);
         }
     }
 

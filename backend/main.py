@@ -10,7 +10,7 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import pandas as pd
 import os
-from backend.routes import points, settings
+from backend.routes import points, settings, auth
 
 app = FastAPI(title="Wi-Fi Network Analysis System")
 
@@ -52,9 +52,15 @@ async def points_page(request: Request):
     """Serve the points page."""
     return templates.TemplateResponse("points.html", {"request": request})
 
-@app.get("/profile")
-async def read_profile():
-    return FileResponse("frontend/templates/profile.html")
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request):
+    """Serve the profile page."""
+    return templates.TemplateResponse("profile.html", {"request": request})
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Serve the login page."""
+    return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get("/api/points")
 async def get_points():
@@ -193,6 +199,7 @@ async def get_summary():
 # Include routers
 app.include_router(points.router)
 app.include_router(settings.router)
+app.include_router(auth.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -4,11 +4,14 @@ from pydantic import BaseModel
 import threading
 import uvicorn
 from datetime import datetime
+import json
+import os
 
 # ==== Конфигурация ====
 TOKEN = "7517930802:AAFQHZogsvsh2uShM6cGi562G7T9Kvt9csY"
 ADMIN_ID = 404051961
 API_KEY = "super-secret-key"  # для защиты FastAPI endpoint
+ANALYSIS_FILE = os.path.join(os.path.dirname(__file__), 'analysis_results.json')
 
 bot = telebot.TeleBot(TOKEN)
 app = FastAPI()
@@ -19,15 +22,38 @@ class NotificationRequest(BaseModel):
     text: str
 
 # ==== Вспомогательные функции ====
+def load_analysis_data():
+    """Загружает данные анализа из JSON файла"""
+    try:
+        with open(ANALYSIS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Ошибка при чтении файла анализа: {e}")
+        return None
+
+def get_point_names():
+    """Получает список имен точек доступа"""
+    data = load_analysis_data()
+    if data and 'point_analyses' in data:
+        return list(data['point_analyses'].keys())
+    return []
+
+def get_point_data(point_name):
+    """Получает данные для конкретной точки"""
+    data = load_analysis_data()
+    if data and 'point_analyses' in data:
+        return data['point_analyses'].get(point_name)
+    return None
+
 def minutes_to_time(minutes):
     """Конвертирует минуты в формат HH:MM"""
-    hours = minutes // 60
-    mins = minutes % 60
+    hours = int(minutes) // 60
+    mins = int(minutes) % 60
     return f"{hours:02d}:{mins:02d}"
 
 def format_channel_table(data, band):
     """Форматирует данные о каналах в текстовую таблицу"""
-    if not data.get('time_periods'):
+    if not data or not data.get('time_periods'):
         return f"Нет данных для диапазона {band}"
     
     # Фильтруем периоды для указанного диапазона
@@ -37,21 +63,37 @@ def format_channel_table(data, band):
     
     # Формируем таблицу
     table = f"📊 Таблица смены каналов ({band}):\n\n"
-    table += "Время | Канал\n"
-    table += "------|-------\n"
+    table += "Время | Канал | Нагрузка | Стабильность\n"
+    table += "-------|--------|-----------|-------------\n"
     
     for period in periods:
         start_time = minutes_to_time(period['start_time'])
         end_time = minutes_to_time(period['end_time'])
         channel = period['channel']
-        table += f"{start_time}-{end_time} | {channel}\n"
+        load = f"{period['load_score']:.1f}%"
+        stability = f"{period['stability'] * 100:.0f}%"
+        table += f"{start_time}-{end_time} | {channel} | {load} | {stability}\n"
     
     return table
+
+def format_point_info(point_name, data):
+    """Форматирует информацию о точке доступа"""
+    if not data or not data.get('time_periods'):
+        return f"Нет данных для точки {point_name}"
+    
+    info = f"📡 Точка доступа: {point_name}\n\n"
+    
+    # Добавляем таблицы для обоих диапазонов
+    table_24 = format_channel_table(data, '2.4 GHz')
+    table_5 = format_channel_table(data, '5 GHz')
+    
+    return f"{info}{table_24}\n\n{table_5}"
 
 # ==== Команды бота ====
 @bot.message_handler(commands=['start'])
 def start_handler(message):
-    bot.send_message(message.chat.id, "Напишите /subscribe чтобы получать уведомления.")
+    bot.send_message(message.chat.id, "Напишите /subscribe чтобы получать уведомления.\n"
+                    "Используйте /channels для просмотра информации о каналах.")
 
 @bot.message_handler(commands=['subscribe'])
 def subscribe_handler(message):
@@ -78,37 +120,32 @@ def notify_handler(message):
 @bot.message_handler(commands=['channels'])
 def channels_handler(message):
     try:
-        # Здесь должен быть код для получения данных о каналах
-        # Пока используем тестовые данные
-        test_data = {
-            'time_periods': [
-                {
-                    'band': '2.4 GHz',
-                    'start_time': 480,  # 8:00
-                    'end_time': 720,    # 12:00
-                    'channel': 1
-                },
-                {
-                    'band': '2.4 GHz',
-                    'start_time': 720,  # 12:00
-                    'end_time': 1080,   # 18:00
-                    'channel': 6
-                },
-                {
-                    'band': '5 GHz',
-                    'start_time': 480,  # 8:00
-                    'end_time': 1080,   # 18:00
-                    'channel': 36
-                }
-            ]
-        }
+        # Получаем список точек
+        points = get_point_names()
+        if not points:
+            bot.send_message(message.chat.id, "Нет доступных точек доступа.")
+            return
         
-        # Форматируем и отправляем таблицы для обоих диапазонов
-        table_24 = format_channel_table(test_data, '2.4 GHz')
-        table_5 = format_channel_table(test_data, '5 GHz')
-        
-        response = f"{table_24}\n\n{table_5}"
-        bot.send_message(message.chat.id, response)
+        # Если указан параметр с именем точки
+        args = message.text.split()
+        if len(args) > 1:
+            point_name = args[1]
+            if point_name in points:
+                # Получаем и отправляем данные для конкретной точки
+                point_data = get_point_data(point_name)
+                response = format_point_info(point_name, point_data)
+                bot.send_message(message.chat.id, response)
+            else:
+                bot.send_message(message.chat.id, f"Точка {point_name} не найдена.\n"
+                               f"Доступные точки: {', '.join(points)}")
+        else:
+            # Если точка не указана, показываем список доступных точек
+            response = "Доступные точки доступа:\n\n"
+            for point in points:
+                response += f"• {point}\n"
+            response += "\nИспользуйте команду '/channels имя_точки' для просмотра информации"
+            bot.send_message(message.chat.id, response)
+            
     except Exception as e:
         bot.send_message(message.chat.id, f"Ошибка при получении данных о каналах: {e}")
 

@@ -20,7 +20,7 @@ class NotificationRequest(BaseModel):
 # ==== Команды бота ====
 @bot.message_handler(commands=['start'])
 def start_handler(message):
-    bot.send_message(message.chat.id, "Привет! Используй /subscribe чтобы получать уведомления.")
+    bot.send_message(message.chat.id, " Напишите /subscribe чтобы получать уведомления.")
 
 @bot.message_handler(commands=['subscribe'])
 def subscribe_handler(message):

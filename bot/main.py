@@ -6,12 +6,23 @@ import uvicorn
 from datetime import datetime
 import json
 import os
+import time
+from typing import Dict, List
 
 # ==== Конфигурация ====
 TOKEN = "7517930802:AAFQHZogsvsh2uShM6cGi562G7T9Kvt9csY"
 ADMIN_ID = 404051961
 API_KEY = "super-secret-key"  # для защиты FastAPI endpoint
 ANALYSIS_FILE = os.path.join(os.path.dirname(__file__), 'analysis_results.json')
+MONITORING_INTERVAL = 300  # интервал проверки в секундах (5 минут)
+
+# Пороговые значения для мониторинга
+THRESHOLDS = {
+    'load_score': 70.0,  # процент загрузки канала
+    'stability': 0.7,    # минимальная стабильность
+    'lost_packets': 20,  # максимальное количество потерянных пакетов
+    'signal_strength': -80  # минимальная сила сигнала в dBm
+}
 
 bot = telebot.TeleBot(TOKEN)
 app = FastAPI()
@@ -88,6 +99,69 @@ def format_point_info(point_name, data):
     table_5 = format_channel_table(data, '5 GHz')
     
     return f"{info}{table_24}\n\n{table_5}"
+
+def check_channel_issues(period: Dict) -> List[str]:
+    """Проверяет наличие проблем в канале"""
+    issues = []
+    
+    # Проверка нагрузки
+    if period['load_score'] > THRESHOLDS['load_score']:
+        issues.append(f"🔴 Высокая нагрузка: {period['load_score']:.1f}%")
+    
+    # Проверка стабильности
+    if period['stability'] < THRESHOLDS['stability']:
+        issues.append(f"⚠️ Низкая стабильность: {period['stability'] * 100:.0f}%")
+    
+    # Проверка потерянных пакетов
+    if period['metrics']['lost_packets'] > THRESHOLDS['lost_packets']:
+        issues.append(f"📦 Большая потеря пакетов: {period['metrics']['lost_packets']:.0f}")
+    
+    # Проверка уровня сигнала
+    if period['metrics']['avg_signal_strength'] < THRESHOLDS['signal_strength']:
+        issues.append(f"📶 Слабый сигнал: {period['metrics']['avg_signal_strength']:.1f} dBm")
+    
+    return issues
+
+def monitor_network_status():
+    """Мониторит состояние сети и отправляет уведомления"""
+    while True:
+        try:
+            data = load_analysis_data()
+            if not data or 'point_analyses' not in data:
+                time.sleep(MONITORING_INTERVAL)
+                continue
+            
+            current_time = datetime.now()
+            minutes_since_midnight = current_time.hour * 60 + current_time.minute
+            
+            # Собираем проблемы по всем точкам
+            all_issues = []
+            
+            for point_name, point_data in data['point_analyses'].items():
+                if not point_data.get('time_periods'):
+                    continue
+                
+                # Находим текущий период для каждой точки
+                current_periods = [
+                    p for p in point_data['time_periods']
+                    if int(p['start_time']) <= minutes_since_midnight <= int(p['end_time'])
+                ]
+                
+                for period in current_periods:
+                    issues = check_channel_issues(period)
+                    if issues:
+                        all_issues.append(f"\n🔹 Точка {point_name} ({period['band']}, канал {period['channel']}):")
+                        all_issues.extend([f"  {issue}" for issue in issues])
+            
+            # Если есть проблемы, отправляем уведомление администратору
+            if all_issues:
+                message = "⚡️ Обнаружены проблемы в сети:\n" + "\n".join(all_issues)
+                bot.send_message(ADMIN_ID, message)
+            
+        except Exception as e:
+            print(f"Ошибка в мониторинге: {e}")
+        
+        time.sleep(MONITORING_INTERVAL)
 
 # ==== Команды бота ====
 @bot.message_handler(commands=['start'])
@@ -172,7 +246,9 @@ async def send_notification_api(
 def start_fastapi():
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+# Запускаем все сервисы в отдельных потоках
 threading.Thread(target=start_fastapi, daemon=True).start()
+threading.Thread(target=monitor_network_status, daemon=True).start()
 
 # ==== Запуск бота ====
 bot.infinity_polling()

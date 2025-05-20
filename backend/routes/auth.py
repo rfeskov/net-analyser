@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import logging
+import bcrypt
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -42,16 +43,28 @@ class PasswordChange(BaseModel):
 # User data file path
 USER_DATA_FILE = Path("frontend/static/data/user_data.json")
 
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
 def ensure_user_data_file():
     """Ensure user data file exists with default admin user"""
     try:
         if not USER_DATA_FILE.exists():
             logger.info(f"Creating user data file at {USER_DATA_FILE}")
             USER_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+            # Хешируем пароль по умолчанию
+            default_password = "admin123"
+            hashed_password = hash_password(default_password)
             default_data = {
                 "users": {
                     "admin@example.com": {
-                        "password": "admin123",  # В продакшене используйте хеширование
+                        "password": hashed_password,
                         "role": "admin"
                     }
                 }
@@ -61,8 +74,22 @@ def ensure_user_data_file():
             logger.info("User data file created successfully")
         else:
             logger.info(f"User data file already exists at {USER_DATA_FILE}")
+            # Проверяем и обновляем существующие пароли
+            with open(USER_DATA_FILE, "r") as f:
+                data = json.load(f)
+                updated = False
+                for email, user_data in data["users"].items():
+                    # Если пароль не хеширован (не начинается с $2b$)
+                    if not user_data["password"].startswith("$2b$"):
+                        logger.info(f"Updating password hash for user: {email}")
+                        user_data["password"] = hash_password(user_data["password"])
+                        updated = True
+                if updated:
+                    with open(USER_DATA_FILE, "w") as f:
+                        json.dump(data, f, indent=4)
+                    logger.info("Updated existing passwords to hashed format")
     except Exception as e:
-        logger.error(f"Error creating user data file: {e}")
+        logger.error(f"Error creating/updating user data file: {e}")
         raise
 
 def get_user(email: str):
@@ -77,10 +104,6 @@ def get_user(email: str):
     except Exception as e:
         logger.error(f"Error getting user: {e}")
         return None
-
-def verify_password(plain_password: str, stored_password: str):
-    """Verify password (in production, use proper password hashing)"""
-    return plain_password == stored_password
 
 def create_access_token(data: dict):
     """Create JWT token"""
@@ -150,8 +173,9 @@ async def change_password(
                 detail="Current password is incorrect"
             )
         
-        # Update password
-        data["users"][current_user["email"]]["password"] = password_change.newPassword
+        # Hash and update new password
+        hashed_new_password = hash_password(password_change.newPassword)
+        data["users"][current_user["email"]]["password"] = hashed_new_password
         logger.info(f"Updated password for user: {current_user['email']}")
         
         with open(USER_DATA_FILE, "w") as f:

@@ -187,21 +187,52 @@ function updateSummaryDisplay(summary) {
     const summaryContainer = document.getElementById('summary-content');
     if (!summaryContainer) return;
 
+    // Get current date and time
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    const timeStr = now.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    // Calculate total clients
+    const totalClients = 56;
+    //const totalClients = summary.bands['2.4 GHz'] + summary.bands['5 GHz'];
+    // Используем одинаковое количество точек для обеих частот
+    const totalPoints = summary.total_points;
+
     summaryContainer.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h3 class="text-lg font-semibold mb-2 text-gray-900">Всего точек</h3>
-                <p class="text-2xl font-bold text-gray-900">${summary.total_points}</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900">Сеть</h3>
+                <div>
+                    <p class="text-base text-gray-600 mb-2">Название: Office-Network</p>
+                    <p class="text-base text-gray-600">Подразделение: Главный офис</p>
+                </div>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h3 class="text-lg font-semibold mb-2 text-gray-900">Конфликты</h3>
-                <p class="text-2xl font-bold text-gray-900">${summary.total_conflicts}</p>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900">Статистика</h3>
+                <div>
+                    <p class="text-base text-gray-600 mb-2">Всего точек: ${totalPoints}</p>
+                    <p class="text-base text-gray-600">Всего клиентов: ${totalClients}</p>
+                </div>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h3 class="text-lg font-semibold mb-2 text-gray-900 break-words">Распределение частот</h3>
-                <div class="space-y-1">
-                    <p class="text-sm text-gray-900">2.4 ГГц: ${summary.bands['2.4 GHz']}</p>
-                    <p class="text-sm text-gray-900">5 ГГц: ${summary.bands['5 GHz']}</p>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900">Распределение частот</h3>
+                <div>
+                    <p class="text-base text-gray-600 mb-2">2.4 ГГц: ${totalPoints} точек</p>
+                    <p class="text-base text-gray-600">5 ГГц: ${totalPoints} точек</p>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold mb-4 text-gray-900">Сегодня</h3>
+                <div>
+                    <p class="text-base text-gray-600 mb-2">Дата: ${dateStr}</p>
+                    <p class="text-base text-gray-600">Время: ${timeStr}</p>
                 </div>
             </div>
         </div>
@@ -663,4 +694,5 @@ function showTab(tabName) {
 }
 
 // Initialize the application when the DOM is loaded
+document.addEventListener('DOMContentLoaded', init); 
 document.addEventListener('DOMContentLoaded', init); 

@@ -4,13 +4,13 @@
             "pointId": "test_point_1",
             "status": false,
             "band24": {
-                "channelMode": "manual",
+                "channelMode": "auto",
                 "channel": "9",
-                "power": "75"
+                "power": "50"
             },
             "band5": {
-                "channelMode": "auto",
-                "channel": "36",
+                "channelMode": "manual",
+                "channel": "48",
                 "power": "25"
             }
         },

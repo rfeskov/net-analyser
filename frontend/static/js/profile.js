@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Get form elements
+    const currentPasswordInput = document.getElementById('current-password');
     const newPasswordInput = document.getElementById('new-password');
     const confirmPasswordInput = document.getElementById('confirm-password');
     const saveButton = document.getElementById('save-button');
@@ -23,12 +24,38 @@ document.addEventListener('DOMContentLoaded', function() {
         logoutButton.addEventListener('click', handleLogout);
     }
 
+    // Add input event listeners for password fields
+    if (confirmPasswordInput) {
+        confirmPasswordInput.addEventListener('input', function() {
+            if (newPasswordInput && this.value !== newPasswordInput.value) {
+                this.style.borderColor = '#EF4444'; // red
+            } else {
+                this.style.borderColor = '#10B981'; // green
+            }
+        });
+    }
+
     // Handle save button click
     async function handleSave() {
         // Validate passwords
-        if (newPasswordInput && confirmPasswordInput) {
+        if (currentPasswordInput && newPasswordInput && confirmPasswordInput) {
+            if (!currentPasswordInput.value) {
+                showError('Введите текущий пароль');
+                return;
+            }
+
+            if (!newPasswordInput.value) {
+                showError('Введите новый пароль');
+                return;
+            }
+
+            if (!confirmPasswordInput.value) {
+                showError('Подтвердите новый пароль');
+                return;
+            }
+
             if (newPasswordInput.value !== confirmPasswordInput.value) {
-                showError('Пароли не совпадают');
+                showError('Новые пароли не совпадают');
                 return;
             }
 
@@ -45,6 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
+                        currentPassword: currentPasswordInput.value,
                         newPassword: newPasswordInput.value
                     })
                 });
@@ -53,7 +81,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     showSuccess();
                     resetForm();
                 } else {
-                    showError('Ошибка при изменении пароля');
+                    const data = await response.json();
+                    showError(data.detail || 'Ошибка при изменении пароля');
                 }
             } catch (error) {
                 console.error('Error changing password:', error);
@@ -94,6 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Reset form fields
     function resetForm() {
+        if (currentPasswordInput) currentPasswordInput.value = '';
         if (newPasswordInput) newPasswordInput.value = '';
         if (confirmPasswordInput) confirmPasswordInput.value = '';
     }

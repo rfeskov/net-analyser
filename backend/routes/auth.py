@@ -36,6 +36,7 @@ class User(BaseModel):
     password: str
 
 class PasswordChange(BaseModel):
+    currentPassword: str
     newPassword: str
 
 # User data file path
@@ -107,6 +108,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     user = get_user(email=token_data.email)
     if user is None:
         raise credentials_exception
+    # Add email to user data
+    user["email"] = email
     return user
 
 @router.post("/api/auth/login", response_model=Token)
@@ -132,16 +135,37 @@ async def change_password(
 ):
     """Change password endpoint"""
     try:
+        logger.info(f"Attempting to change password for user: {current_user.get('email')}")
+        logger.info(f"Current user data: {current_user}")
+        
         with open(USER_DATA_FILE, "r") as f:
             data = json.load(f)
+            logger.info(f"Loaded user data from file: {data}")
+        
+        # Verify current password
+        if not verify_password(password_change.currentPassword, data["users"][current_user["email"]]["password"]):
+            logger.warning(f"Failed password change attempt for user: {current_user['email']} - incorrect current password")
+            raise HTTPException(
+                status_code=401,
+                detail="Current password is incorrect"
+            )
         
         # Update password
         data["users"][current_user["email"]]["password"] = password_change.newPassword
+        logger.info(f"Updated password for user: {current_user['email']}")
         
         with open(USER_DATA_FILE, "w") as f:
             json.dump(data, f, indent=4)
+            logger.info("Successfully wrote updated user data to file")
         
+        logger.info(f"Password changed successfully for user: {current_user['email']}")
         return {"message": "Password changed successfully"}
     except Exception as e:
         logger.error(f"Error changing password: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) 
+        logger.error(f"Current user data: {current_user}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/auth/verify")
+async def verify_token(current_user: dict = Depends(get_current_user)):
+    """Verify token endpoint"""
+    return {"message": "Token is valid", "user": current_user} 

@@ -3,7 +3,41 @@ async function loadPoints() {
     try {
         const response = await fetch('/api/points');
         const points = await response.json();
-        updatePointsGrid(points);
+        console.log('Loaded points from API:', points);
+        
+        // Add static points only on the points page
+        const staticPoints = [
+            {
+                id: "point_1",
+                name: "point_1",
+                band: "2.4 GHz & 5 GHz",
+                is_online: false,
+                clients_count: 0,
+                channel: "Авто",
+                channel_24: "Авто",
+                channel_5: "Авто",
+                power: "100",
+                is_static: true
+            },
+            {
+                id: "point_2",
+                name: "point_2",
+                band: "2.4 GHz & 5 GHz",
+                is_online: false,
+                clients_count: 0,
+                channel: "Авто",
+                channel_24: "Авто",
+                channel_5: "Авто",
+                power: "100",
+                is_static: true
+            }
+        ];
+        console.log('Static points:', staticPoints);
+
+        // Combine static points with dynamic points
+        const allPoints = [...staticPoints, ...points];
+        console.log('All points:', allPoints);
+        updatePointsGrid(allPoints);
     } catch (error) {
         console.error('Ошибка загрузки точек:', error);
     }
@@ -12,54 +46,64 @@ async function loadPoints() {
 // Update points grid with cards
 function updatePointsGrid(points) {
     const grid = document.getElementById('points-grid');
-    if (!grid) return;
+    if (!grid) {
+        console.error('Grid element not found');
+        return;
+    }
 
+    console.log('Updating grid with points:', points);
     grid.innerHTML = '';
 
     points.forEach(point => {
-        const card = document.createElement('div');
-        card.className = 'bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow duration-200';
-        
-        // Determine status color
-        const statusColor = point.is_online ? 'bg-green-500' : 'bg-red-500';
-        
-        card.innerHTML = `
-            <div class="flex items-start justify-between mb-4">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-900">${point.name}</h3>
-                    <p class="text-sm text-gray-500">${point.band}</p>
-                </div>
-                <div class="flex items-center">
-                    <span class="inline-block w-3 h-3 rounded-full ${statusColor} mr-2"></span>
-                    <span class="text-sm text-gray-600">${point.is_online ? 'Онлайн' : 'Оффлайн'}</span>
-                </div>
-            </div>
-            <div class="space-y-2">
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-500">Клиентов:</span>
-                    <span class="text-gray-900 font-medium">${point.clients_count || 0}</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-500">Канал:</span>
-                    <span class="text-gray-900 font-medium">${point.channel || 'Н/Д'}</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-500">Уровень сигнала:</span>
-                    <span class="text-gray-900 font-medium">${point.signal_strength ? point.signal_strength + ' dBm' : 'Н/Д'}</span>
-                </div>
-            </div>
-            <div class="mt-4 pt-4 border-t border-gray-100">
-                <button 
-                    onclick="openSettingsModal('${point.id}')"
-                    class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors duration-200"
-                >
-                    Настройки
+        const card = createPointCard(point);
+        grid.appendChild(card);
+    });
+}
+
+function createPointCard(point) {
+    console.log('Creating card for point:', point);
+    const card = document.createElement('div');
+    card.className = 'point-card';
+    card.dataset.pointId = point.id;
+
+    const statusClass = point.is_online ? 'status-online' : 'status-offline';
+    const statusText = point.is_online ? 'Онлайн' : 'Оффлайн';
+
+    // Create base card content without settings button
+    let cardContent = `
+        <div class="point-header">
+            <h3>${point.name}</h3>
+            <span class="status ${statusClass}">${statusText}</span>
+        </div>
+        <div class="point-info">
+            <p><strong>Диапазон:</strong> ${point.band}</p>
+            <p><strong>Канал:</strong> ${point.channel}</p>
+            <p><strong>Мощность сигнала:</strong> ${point.signal_strength !== null ? point.signal_strength + ' dBm' : 'Н/Д'}</p>
+        </div>
+    `;
+
+    // Add settings button only for non-static points
+    if (!point.is_static) {
+        cardContent += `
+            <div class="point-actions">
+                <button class="settings-btn">
+                    <i class="fas fa-cog"></i> Настройки
                 </button>
             </div>
         `;
-        
-        grid.appendChild(card);
-    });
+    }
+
+    card.innerHTML = cardContent;
+
+    // Add click handler for settings button only if not static
+    if (!point.is_static) {
+        const settingsBtn = card.querySelector('.settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => openSettingsModal(point.id));
+        }
+    }
+
+    return card;
 }
 
 // Modal functionality
@@ -70,6 +114,9 @@ function openSettingsModal(pointId) {
     const modal = document.getElementById('settings-modal');
     const title = document.getElementById('modal-title');
     title.textContent = `Настройки точки доступа ${pointId}`;
+    
+    // Load point settings
+    loadPointSettings(pointId);
     
     // Show modal
     modal.classList.remove('hidden');
@@ -90,6 +137,85 @@ function closeSettingsModal() {
     currentPointId = null;
 }
 
+// Add function to save settings to JSON file
+async function saveSettingsToFile(pointId, settings) {
+    try {
+        const response = await fetch('/api/settings/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                pointId: pointId,
+                settings: settings
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save settings');
+        }
+    } catch (error) {
+        console.error('Error saving settings to file:', error);
+        throw error;
+    }
+}
+
+// Add function to load settings from JSON file
+async function loadSettingsFromFile(pointId) {
+    try {
+        const response = await fetch('/api/settings/load');
+        if (!response.ok) {
+            throw new Error('Failed to load settings');
+        }
+        const data = await response.json();
+        return data.points[pointId] || null;
+    } catch (error) {
+        console.error('Error loading settings from file:', error);
+        return null;
+    }
+}
+
+// Update loadPointSettings to use JSON file
+async function loadPointSettings(pointId) {
+    try {
+        // Get current points data
+        const response = await fetch('/api/points');
+        const points = await response.json();
+        const point = points.find(p => p.id === pointId);
+        
+        if (!point) {
+            throw new Error('Point not found');
+        }
+
+        // Try to load saved settings first
+        const savedSettings = await loadSettingsFromFile(pointId);
+        
+        // Set default values based on current point data or saved settings
+        document.getElementById('point-status').checked = savedSettings?.status ?? point.is_online;
+        
+        // Set 2.4 GHz settings
+        const channel24 = savedSettings?.band24?.channel || point.channel_24 || point.channel;
+        const isAuto24 = savedSettings?.band24?.channelMode === 'auto' || !channel24 || channel24 === 'Авто';
+        document.getElementById('channel-mode-24').value = isAuto24 ? 'auto' : 'manual';
+        document.getElementById('channel-24').value = isAuto24 ? '1' : channel24;
+        document.getElementById('channel-24').disabled = isAuto24;
+        document.getElementById('power-24').value = savedSettings?.band24?.power || '100';
+        
+        // Set 5 GHz settings
+        const channel5 = savedSettings?.band5?.channel || point.channel_5;
+        const isAuto5 = savedSettings?.band5?.channelMode === 'auto' || !channel5 || channel5 === 'Авто';
+        document.getElementById('channel-mode-5').value = isAuto5 ? 'auto' : 'manual';
+        document.getElementById('channel-5').value = isAuto5 ? '36' : channel5;
+        document.getElementById('channel-5').disabled = isAuto5;
+        document.getElementById('power-5').value = savedSettings?.band5?.power || '100';
+
+    } catch (error) {
+        console.error('Error loading point settings:', error);
+        alert('Ошибка при загрузке настроек точки');
+    }
+}
+
+// Update saveSettings to use JSON file
 async function saveSettings() {
     if (!currentPointId) return;
     
@@ -109,23 +235,38 @@ async function saveSettings() {
     };
     
     try {
-        // Here you would typically send the settings to the backend
-        console.log('Saving settings:', settings);
-        // await fetch('/api/points/' + currentPointId + '/settings', {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //     },
-        //     body: JSON.stringify(settings)
-        // });
+        // Save settings to JSON file
+        await saveSettingsToFile(currentPointId, settings);
         
+        // Get current points data
+        const pointsResponse = await fetch('/api/points');
+        const points = await pointsResponse.json();
+        
+        // Update the point in the grid while preserving all other data
+        const updatedPoints = points.map(point => {
+            if (point.id === currentPointId) {
+                return {
+                    ...point,
+                    is_online: settings.status,
+                    channel_24: settings.band24.channelMode === 'auto' ? 'Авто' : settings.band24.channel,
+                    channel_5: settings.band5.channelMode === 'auto' ? 'Авто' : settings.band5.channel,
+                    channel: point.channel || settings.band24.channelMode === 'auto' ? 'Авто' : settings.band24.channel,
+                    power: settings.band24.power // Use 2.4 GHz power as the main power level
+                };
+            }
+            return point;
+        });
+        
+        updatePointsGrid(updatedPoints);
         closeSettingsModal();
-        // Reload points to show updated status
-        loadPoints();
     } catch (error) {
         console.error('Error saving settings:', error);
+        alert('Ошибка при сохранении настроек');
     }
 }
 
 // Initialize the page
-document.addEventListener('DOMContentLoaded', loadPoints); 
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, calling loadPoints');
+    loadPoints();
+}); 

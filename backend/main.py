@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import pandas as pd
 import os
+from backend.routes import points, settings
 
 app = FastAPI(title="Wi-Fi Network Analysis System")
 
@@ -55,6 +56,8 @@ async def points_page(request: Request):
 async def get_points():
     """Get list of available points."""
     points = []
+    
+    # Add dynamic points from analysis
     for point_id, data in analysis_results["point_analyses"].items():
         # Get the latest time period to extract current info
         latest_period = data["time_periods"][-1]
@@ -71,6 +74,9 @@ async def get_points():
                 "is_online": True,
                 "clients_count": int(latest_data["total_client_count"]),
                 "channel": str(latest_data["channel"]),
+                "channel_24": str(latest_data["channel"]),
+                "channel_5": "Авто",
+                "power": "100",
                 "signal_strength": int(float(latest_data["avg_signal_strength"]))  # Round to integer
             })
         except Exception as e:
@@ -81,6 +87,9 @@ async def get_points():
                 "is_online": True,
                 "clients_count": 0,
                 "channel": latest_period["channel"],
+                "channel_24": latest_period["channel"],
+                "channel_5": "Авто",
+                "power": "100",
                 "signal_strength": None
             })
     
@@ -176,6 +185,10 @@ async def get_summary():
         "total_conflicts": total_conflicts,
         "bands": bands
     }
+
+# Include routers
+app.include_router(points.router)
+app.include_router(settings.router)
 
 if __name__ == "__main__":
     import uvicorn

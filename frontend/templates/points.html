@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/points.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="bg-gray-50">
     <!-- Header -->
@@ -71,7 +73,7 @@
                                 <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                             </label>
                         </div>
-
+                        
                         <!-- 2.4 GHz Settings -->
                         <div class="border-t border-gray-200 pt-4">
                             <h4 class="text-sm font-medium text-gray-900 mb-4">Настройки 2.4 ГГц</h4>
@@ -87,8 +89,18 @@
                                     <label class="block text-sm font-medium text-gray-700">Канал</label>
                                     <select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" id="channel-24" disabled>
                                         <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
                                         <option value="6">6</option>
+                                        <option value="7">7</option>
+                                        <option value="8">8</option>
+                                        <option value="9">9</option>
+                                        <option value="10">10</option>
                                         <option value="11">11</option>
+                                        <option value="12">12</option>
+                                        <option value="13">13</option>
                                     </select>
                                 </div>
                                 <div>
@@ -102,7 +114,7 @@
                                 </div>
                             </div>
                         </div>
-
+                        
                         <!-- 5 GHz Settings -->
                         <div class="border-t border-gray-200 pt-4">
                             <h4 class="text-sm font-medium text-gray-900 mb-4">Настройки 5 ГГц</h4>
@@ -125,6 +137,23 @@
                                         <option value="56">56</option>
                                         <option value="60">60</option>
                                         <option value="64">64</option>
+                                        <option value="100">100</option>
+                                        <option value="104">104</option>
+                                        <option value="108">108</option>
+                                        <option value="112">112</option>
+                                        <option value="116">116</option>
+                                        <option value="120">120</option>
+                                        <option value="124">124</option>
+                                        <option value="128">128</option>
+                                        <option value="132">132</option>
+                                        <option value="136">136</option>
+                                        <option value="140">140</option>
+                                        <option value="144">144</option>
+                                        <option value="149">149</option>
+                                        <option value="153">153</option>
+                                        <option value="157">157</option>
+                                        <option value="161">161</option>
+                                        <option value="165">165</option>
                                     </select>
                                 </div>
                                 <div>
@@ -154,52 +183,4 @@
 
     <script src="/static/js/points.js"></script>
 </body>
-</html>
-
-                    <!-- Channel Load Charts -->
-                    <div class="bg-white p-8 rounded-lg shadow mb-8">
-                        <h3 class="text-lg font-semibold mb-6 text-gray-900">Количество пользователей</h3>
-                        <div class="grid grid-cols-1 gap-6">
-                            <div class="h-64 my-12">
-                                <canvas id="channel-load-chart-2.4"></canvas>
-                            </div>
-                            <div class="h-64 my-12">
-                                <canvas id="channel-load-chart-5"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Channel Signal Charts -->
-                    <div class="bg-white p-8 rounded-lg shadow">
-                        <h3 class="text-lg font-semibold mb-6 text-gray-900">Уровень помех</h3>
-                        <div class="grid grid-cols-1 gap-6">
-                            <div class="h-64 my-12">
-                                <canvas id="channel-signal-chart-2.4"></canvas>
-                            </div>
-                            <div class="h-64 my-12">
-                                <canvas id="channel-signal-chart-5"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Points Content -->
-                    <div id="points-content">
-                        <div class="mb-8">
-                            <h2 class="text-2xl font-bold mb-4 text-gray-900">Точки доступа</h2>
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="points-grid">
-                                <!-- Point cards will be added here dynamically -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex-shrink-0 flex items-center">
-                        <h1 class="text-xl font-bold text-gray-900">Анализатор сети</h1>
-                    </div>
-                    <nav class="ml-6 flex space-x-8">
-                        <a href="/" class="hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium border-indigo-500 text-gray-900">
-                            Дашборд
-                        </a>
-                        <a href="/points" class="hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium border-transparent text-gray-500">
-                            Точки доступа
-                        </a>
-                    </nav> 
+</html> 

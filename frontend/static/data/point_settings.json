@@ -1,0 +1,60 @@
+{
+    "points": {
+        "test_point_1": {
+            "pointId": "test_point_1",
+            "status": false,
+            "band24": {
+                "channelMode": "manual",
+                "channel": "7",
+                "power": "75"
+            },
+            "band5": {
+                "channelMode": "auto",
+                "channel": "44",
+                "power": "25"
+            }
+        },
+        "test_point_2": {
+            "pointId": "test_point_2",
+            "status": false,
+            "band24": {
+                "channelMode": "manual",
+                "channel": "1",
+                "power": "75"
+            },
+            "band5": {
+                "channelMode": "manual",
+                "channel": "64",
+                "power": "100"
+            }
+        },
+        "test_point_3": {
+            "pointId": "test_point_3",
+            "status": false,
+            "band24": {
+                "channelMode": "manual",
+                "channel": "",
+                "power": "100"
+            },
+            "band5": {
+                "channelMode": "auto",
+                "channel": "36",
+                "power": "100"
+            }
+        },
+        "point_1": {
+            "pointId": "point_1",
+            "status": true,
+            "band24": {
+                "channelMode": "auto",
+                "channel": "1",
+                "power": "100"
+            },
+            "band5": {
+                "channelMode": "auto",
+                "channel": "36",
+                "power": "100"
+            }
+        }
+    }
+}

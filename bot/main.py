@@ -252,9 +252,20 @@ def status_handler(message):
 @bot.message_handler(commands=['subscribe'])
 def subscribe_handler(message):
     user_id = message.chat.id
-    if storage.add_pending(user_id):
+    user_info = {
+        'name': message.from_user.first_name,
+        'username': message.from_user.username or 'Нет username',
+        'last_name': message.from_user.last_name or ''
+    }
+    
+    if storage.add_pending(user_id, user_info):
         bot.send_message(user_id, "Ваша заявка на подписку отправлена администратору. Ожидайте подтверждения.")
-        bot.send_message(ADMIN_ID, f"Новая заявка на подписку от пользователя {user_id}")
+        # Формируем информативное сообщение для админа
+        admin_msg = f"Новая заявка на подписку:\n"
+        admin_msg += f"👤 Имя: {user_info['name']} {user_info['last_name']}\n"
+        admin_msg += f"🔗 Username: @{user_info['username']}\n"
+        admin_msg += f"🆔 ID: {user_id}"
+        bot.send_message(ADMIN_ID, admin_msg)
     else:
         if user_id in storage.get_subscribers():
             bot.send_message(user_id, "Вы уже подписаны на уведомления.")
@@ -281,9 +292,11 @@ def pending_handler(message):
         return
     
     message_text = "Ожидающие подтверждения заявки:\n\n"
-    for user_id in pending:
-        message_text += f"ID: {user_id}\n"
-    message_text += "\nИспользуйте /approve <ID> или /reject <ID>"
+    for user_id, user_info in pending.items():
+        message_text += f"👤 {user_info['name']} {user_info['last_name']}\n"
+        message_text += f"🔗 @{user_info['username']}\n"
+        message_text += f"🆔 ID: {user_id}\n\n"
+    message_text += "Используйте /approve <ID> или /reject <ID>"
     bot.send_message(message.chat.id, message_text)
 
 @bot.message_handler(commands=['approve'])

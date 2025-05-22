@@ -331,6 +331,8 @@ def testmode_on_handler(message):
         send_no_access(message)
         return
     
+    global test_mode, monitor_thread, monitor_active
+    
     if test_mode:
         bot.send_message(message.chat.id, "Тестовый режим уже включен.")
         return
@@ -350,6 +352,8 @@ def testmode_off_handler(message):
     if message.from_user.id != ADMIN_ID:
         send_no_access(message)
         return
+    
+    global test_mode, monitor_active
     
     if not test_mode:
         bot.send_message(message.chat.id, "Тестовый режим уже выключен.")

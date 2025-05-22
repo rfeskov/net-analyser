@@ -195,6 +195,10 @@ def send_no_access(message):
 @bot.message_handler(commands=['start'])
 def start_handler(message):
     if message.from_user.id == ADMIN_ID:
+        markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+        contact_btn = telebot.types.KeyboardButton("Добавить через контакт", request_contact=True)
+        markup.add(contact_btn)
+        
         bot.send_message(message.chat.id, 
             "Админ-команды:\n"
             "/testmode_on - включить тестовый режим\n"
@@ -204,26 +208,27 @@ def start_handler(message):
             "/list_subs - список подписчиков\n"
             "/remove_sub <id> - удалить подписчика\n\n"
             "Для добавления подписчика:\n"
-            "Перешлите мне любое сообщение от пользователя")
+            "1. Перешлите мне любое сообщение от пользователя\n"
+            "2. Или нажмите кнопку 'Добавить через контакт' и выберите контакт",
+            reply_markup=markup)
     else:
         send_no_access(message)
 
 @bot.message_handler(content_types=['contact'])
 def handle_contact(message):
-    if not check_access(message):
+    if message.from_user.id != ADMIN_ID:
         send_no_access(message)
         return
 
-    if message.from_user.id == ADMIN_ID:
-        user_id = message.contact.user_id
-        if storage.add_subscriber(user_id):
-            bot.send_message(ADMIN_ID, f"Пользователь {user_id} добавлен в подписчики.")
-            try:
-                bot.send_message(user_id, "Вам предоставлен доступ к уведомлениям.")
-            except Exception as e:
-                bot.send_message(ADMIN_ID, f"Предупреждение: не удалось отправить сообщение пользователю {user_id}")
-        else:
-            bot.send_message(ADMIN_ID, f"Пользователь {user_id} уже является подписчиком.")
+    user_id = message.contact.user_id
+    if storage.add_subscriber(user_id):
+        bot.reply_to(message, f"Пользователь {user_id} добавлен в подписчики.")
+        try:
+            bot.send_message(user_id, "Вам предоставлен доступ к уведомлениям.")
+        except Exception as e:
+            bot.reply_to(message, f"Предупреждение: не удалось отправить сообщение пользователю {user_id}")
+    else:
+        bot.reply_to(message, f"Пользователь {user_id} уже является подписчиком.")
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):

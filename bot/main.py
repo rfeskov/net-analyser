@@ -196,8 +196,11 @@ def send_no_access(message):
 def start_handler(message):
     if message.from_user.id == ADMIN_ID:
         markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
-        contact_btn = telebot.types.KeyboardButton("Добавить через контакт", request_contact=True)
-        markup.add(contact_btn)
+        users_btn = telebot.types.KeyboardButton(
+            "Выбрать пользователя", 
+            request_users={"request_id": 1}
+        )
+        markup.add(users_btn)
         
         bot.send_message(message.chat.id, 
             "Админ-команды:\n"
@@ -209,18 +212,18 @@ def start_handler(message):
             "/remove_sub <id> - удалить подписчика\n\n"
             "Для добавления подписчика:\n"
             "1. Перешлите мне любое сообщение от пользователя\n"
-            "2. Или нажмите кнопку 'Добавить через контакт' и выберите контакт",
+            "2. Или нажмите кнопку 'Выбрать пользователя' и выберите из списка",
             reply_markup=markup)
     else:
         send_no_access(message)
 
-@bot.message_handler(content_types=['contact'])
-def handle_contact(message):
+@bot.message_handler(content_types=['users_shared'])
+def handle_users_shared(message):
     if message.from_user.id != ADMIN_ID:
         send_no_access(message)
         return
 
-    user_id = message.contact.user_id
+    user_id = message.users_shared.user_ids[0]  # Берем первого выбранного пользователя
     if storage.add_subscriber(user_id):
         bot.reply_to(message, f"Пользователь {user_id} добавлен в подписчики.")
         try:

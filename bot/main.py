@@ -227,9 +227,15 @@ def handle_users_shared(message):
         send_no_access(message)
         return
 
+    print(f"Debug: users_shared data: {message.users_shared.__dict__}")
+    print(f"Debug: user_ids data: {message.users_shared.user_ids}")
+    
     shared_user = message.users_shared.user_ids[0]
+    print(f"Debug: first shared_user data: {shared_user}")
+    
     # Если shared_user это словарь, берем user_id из него
     user_id = shared_user.get('user_id') if isinstance(shared_user, dict) else shared_user
+    print(f"Debug: extracted user_id: {user_id}")
     
     if storage.add_subscriber(user_id):
         name = shared_user.get('first_name', 'Неизвестный') if isinstance(shared_user, dict) else 'Пользователь'
@@ -238,6 +244,7 @@ def handle_users_shared(message):
             bot.send_message(user_id, "Вам предоставлен доступ к уведомлениям.")
         except Exception as e:
             bot.reply_to(message, f"Предупреждение: не удалось отправить сообщение пользователю {user_id}")
+            print(f"Debug: send message error: {str(e)}")
     else:
         bot.reply_to(message, f"Пользователь (ID: {user_id}) уже является подписчиком.")
 

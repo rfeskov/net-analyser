@@ -8,6 +8,7 @@ from datetime import datetime
 import time
 import random
 from storage import Storage
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 # ==== Конфигурация ====
 TOKEN = "7517930802:AAFQHZogsvsh2uShM6cGi562G7T9Kvt9csY"
@@ -187,20 +188,71 @@ def monitor_demo():
 @bot.message_handler(commands=['start'])
 def start_handler(message):
     if message.from_user.id == ADMIN_ID:
+        markup = ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(KeyboardButton('📥 Добавить пользователя'))
+        markup.add(KeyboardButton('👥 Список подписчиков'))
+        markup.add(KeyboardButton('⚙️ Статус системы'))
+        
         bot.send_message(message.chat.id, 
-            "Админ-команды:\n"
+            "Админ-панель:\n\n"
+            "Команды:\n"
             "/testmode_on - включить тестовый режим\n"
             "/testmode_off - выключить тестовый режим\n"
             "/status - статус тестового режима\n"
             "/notify - отправить уведомление всем\n"
             "/pending - просмотр заявок на подписку\n"
             "/approve <user_id> - одобрить подписчика\n"
-            "/reject <user_id> - отклонить подписчика\n\n"
-            "Общие команды:\n"
-            "/subscribe - подать заявку на подписку\n"
-            "/unsubscribe - отписаться от уведомлений")
+            "/reject <user_id> - отклонить подписчика",
+            reply_markup=markup)
     else:
-        bot.send_message(message.chat.id, "Напишите /subscribe чтобы подать заявку на получение уведомлений.")
+        bot.send_message(message.chat.id, 
+            "Добро пожаловать! Для получения уведомлений обратитесь к администратору системы.")
+
+@bot.message_handler(content_types=['text'])
+def handle_text(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+        
+    if message.text == '📥 Добавить пользователя':
+        bot.send_message(message.chat.id, 
+            "Для добавления пользователя, отправьте его Telegram ID.\n"
+            "Формат: /add_user <ID>")
+    elif message.text == '👥 Список подписчиков':
+        subscribers = storage.get_subscribers()
+        if not subscribers:
+            bot.send_message(message.chat.id, "Список подписчиков пуст.")
+            return
+            
+        message_text = "Список активных подписчиков:\n\n"
+        for user_id in subscribers:
+            message_text += f"ID: {user_id}\n"
+        bot.send_message(message.chat.id, message_text)
+    elif message.text == '⚙️ Статус системы':
+        status = "✅ Включен" if test_mode else "❌ Выключен"
+        subscribers_count = len(storage.get_subscribers())
+        pending_count = len(storage.get_pending_subscribers())
+        
+        bot.send_message(message.chat.id,
+            f"Статус системы:\n\n"
+            f"🔄 Тестовый режим: {status}\n"
+            f"👥 Подписчиков: {subscribers_count}\n"
+            f"📝 Ожидают подтверждения: {pending_count}")
+
+@bot.message_handler(commands=['add_user'])
+def add_user_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "Нет доступа.")
+        return
+        
+    try:
+        user_id = int(message.text.split()[1])
+        if storage.approve_subscriber(user_id):
+            bot.send_message(message.chat.id, f"Пользователь {user_id} успешно добавлен.")
+            bot.send_message(user_id, "Вы были добавлены в список получателей уведомлений.")
+        else:
+            bot.send_message(message.chat.id, f"Не удалось добавить пользователя {user_id}.")
+    except (IndexError, ValueError):
+        bot.send_message(message.chat.id, "Использование: /add_user <user_id>")
 
 @bot.message_handler(commands=['testmode_on'])
 def testmode_on_handler(message):
@@ -248,75 +300,6 @@ def status_handler(message):
     
     status = "✅ Включен" if test_mode else "❌ Выключен"
     bot.send_message(message.chat.id, f"Статус тестового режима: {status}")
-
-@bot.message_handler(commands=['subscribe'])
-def subscribe_handler(message):
-    user_id = message.chat.id
-    if storage.add_pending(user_id):
-        bot.send_message(user_id, "Ваша заявка на подписку отправлена администратору. Ожидайте подтверждения.")
-        bot.send_message(ADMIN_ID, f"Новая заявка на подписку от пользователя {user_id}")
-    else:
-        if user_id in storage.get_subscribers():
-            bot.send_message(user_id, "Вы уже подписаны на уведомления.")
-        else:
-            bot.send_message(user_id, "Ваша заявка уже находится на рассмотрении.")
-
-@bot.message_handler(commands=['unsubscribe'])
-def unsubscribe_handler(message):
-    user_id = message.chat.id
-    if storage.remove_subscriber(user_id):
-        bot.send_message(user_id, "Вы отписались от уведомлений.")
-    else:
-        bot.send_message(user_id, "Вы не были подписаны на уведомления.")
-
-@bot.message_handler(commands=['pending'])
-def pending_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "Нет доступа.")
-        return
-    
-    pending = storage.get_pending_subscribers()
-    if not pending:
-        bot.send_message(message.chat.id, "Нет ожидающих подтверждения заявок.")
-        return
-    
-    message_text = "Ожидающие подтверждения заявки:\n\n"
-    for user_id in pending:
-        message_text += f"ID: {user_id}\n"
-    message_text += "\nИспользуйте /approve <ID> или /reject <ID>"
-    bot.send_message(message.chat.id, message_text)
-
-@bot.message_handler(commands=['approve'])
-def approve_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "Нет доступа.")
-        return
-    
-    try:
-        user_id = int(message.text.split()[1])
-        if storage.approve_subscriber(user_id):
-            bot.send_message(message.chat.id, f"Пользователь {user_id} одобрен.")
-            bot.send_message(user_id, "Ваша заявка на подписку одобрена! Теперь вы будете получать уведомления.")
-        else:
-            bot.send_message(message.chat.id, f"Пользователь {user_id} не найден в списке ожидающих.")
-    except (IndexError, ValueError):
-        bot.send_message(message.chat.id, "Использование: /approve <user_id>")
-
-@bot.message_handler(commands=['reject'])
-def reject_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "Нет доступа.")
-        return
-    
-    try:
-        user_id = int(message.text.split()[1])
-        if storage.reject_subscriber(user_id):
-            bot.send_message(message.chat.id, f"Заявка пользователя {user_id} отклонена.")
-            bot.send_message(user_id, "Ваша заявка на подписку была отклонена администратором.")
-        else:
-            bot.send_message(message.chat.id, f"Пользователь {user_id} не найден в списке ожидающих.")
-    except (IndexError, ValueError):
-        bot.send_message(message.chat.id, "Использование: /reject <user_id>")
 
 @bot.message_handler(commands=['notify'])
 def notify_handler(message):

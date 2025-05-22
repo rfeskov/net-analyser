@@ -225,128 +225,31 @@ def handle_contact(message):
         else:
             bot.send_message(ADMIN_ID, f"Пользователь {user_id} уже является подписчиком.")
 
-@bot.message_handler(func=lambda message: message.forward_from is not None)
-def handle_forwarded(message):
-    if message.from_user.id == ADMIN_ID:
-        user_id = message.forward_from.id
-        if storage.add_subscriber(user_id):
-            bot.send_message(ADMIN_ID, f"Пользователь {user_id} добавлен в подписчики.")
-            try:
-                bot.send_message(user_id, "Вам предоставлен доступ к уведомлениям.")
-            except Exception as e:
-                bot.send_message(ADMIN_ID, f"Предупреждение: не удалось отправить сообщение пользователю {user_id}")
-        else:
-            bot.send_message(ADMIN_ID, f"Пользователь {user_id} уже является подписчиком.")
-
-@bot.message_handler(commands=['testmode_on'])
-def testmode_on_handler(message):
-    global test_mode, monitor_thread, monitor_active
-    
-    if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "Нет доступа.")
-        return
-    
-    if test_mode:
-        bot.send_message(message.chat.id, "Тестовый режим уже включен.")
-        return
-    
-    test_mode = True
-    monitor_active = True
-    monitor_thread = threading.Thread(target=monitor_demo, daemon=True)
-    monitor_thread.start()
-    
-    bot.send_message(message.chat.id, 
-        "✅ Тестовый режим включен\n"
-        "Уведомления будут приходить каждую минуту\n"
-        "Для отключения используйте /testmode_off")
-
-@bot.message_handler(commands=['testmode_off'])
-def testmode_off_handler(message):
-    global test_mode, monitor_active
-    
-    if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "Нет доступа.")
-        return
-    
-    if not test_mode:
-        bot.send_message(message.chat.id, "Тестовый режим уже выключен.")
-        return
-    
-    test_mode = False
-    monitor_active = False
-    bot.send_message(message.chat.id, "❌ Тестовый режим выключен")
-
-@bot.message_handler(commands=['status'])
-def status_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "Нет доступа.")
-        return
-    
-    status = "✅ Включен" if test_mode else "❌ Выключен"
-    bot.send_message(message.chat.id, f"Статус тестового режима: {status}")
-
-@bot.message_handler(commands=['remove_sub'])
-def remove_subscriber_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        send_no_access(message)
-        return
-    
-    try:
-        user_id = int(message.text.split()[1])
-        if storage.remove_subscriber(user_id):
-            bot.send_message(message.chat.id, f"Пользователь {user_id} удален из подписчиков.")
-            try:
-                bot.send_message(user_id, "Ваш доступ к уведомлениям отключен.")
-            except Exception:
-                pass
-        else:
-            bot.send_message(message.chat.id, f"Пользователь {user_id} не является подписчиком.")
-    except (IndexError, ValueError):
-        bot.send_message(message.chat.id, "Использование: /remove_sub <user_id>")
-
-@bot.message_handler(commands=['list_subs'])
-def list_subscribers_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        send_no_access(message)
-        return
-    
-    subscribers = storage.get_subscribers()
-    if not subscribers:
-        bot.send_message(message.chat.id, "Список подписчиков пуст.")
-        return
-    
-    message_text = "Список подписчиков:\n\n"
-    for user_id in subscribers:
-        message_text += f"ID: {user_id}\n"
-    bot.send_message(message.chat.id, message_text)
-
-@bot.message_handler(commands=['subscribe', 'unsubscribe'])
-def deprecated_handler(message):
-    markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    share_button = telebot.types.KeyboardButton(text="Отправить контакт", request_contact=True)
-    markup.add(share_button)
-    
-    bot.send_message(message.chat.id, 
-        "Для получения уведомлений:\n"
-        "1. Отправьте свой контакт администратору, нажав кнопку ниже\n"
-        "2. Или перешлите это сообщение администратору",
-        reply_markup=markup)
-
-@bot.message_handler(commands=['notify'])
-def notify_handler(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "Нет доступа.")
-        return
-    text = message.text.replace("/notify", "").strip()
-    if not text:
-        bot.send_message(message.chat.id, "Добавь текст после команды.")
-        return
-    send_notification(text)
-    bot.send_message(message.chat.id, "Уведомление отправлено.")
-
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
     """Обработчик всех остальных сообщений"""
+    if message.from_user.id == ADMIN_ID:
+        # Проверяем все возможные варианты пересланного сообщения
+        forwarded_user_id = None
+        
+        if message.forward_from:
+            forwarded_user_id = message.forward_from.id
+        elif message.forward_sender_name:
+            # Пользователь скрыл свой профиль
+            bot.reply_to(message, "Не могу добавить этого пользователя, так как его профиль скрыт настройками приватности.")
+            return
+            
+        if forwarded_user_id:
+            if storage.add_subscriber(forwarded_user_id):
+                bot.reply_to(message, f"Пользователь {forwarded_user_id} добавлен в подписчики.")
+                try:
+                    bot.send_message(forwarded_user_id, "Вам предоставлен доступ к уведомлениям.")
+                except Exception as e:
+                    bot.reply_to(message, f"Предупреждение: не удалось отправить сообщение пользователю {forwarded_user_id}")
+            else:
+                bot.reply_to(message, f"Пользователь {forwarded_user_id} уже является подписчиком.")
+            return
+    
     if not check_access(message):
         send_no_access(message)
 
@@ -395,3 +298,94 @@ threading.Thread(target=start_fastapi, daemon=True).start()
 
 # ==== Запуск бота ====
 bot.infinity_polling()
+
+@bot.message_handler(commands=['testmode_on'])
+def testmode_on_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        send_no_access(message)
+        return
+    
+    if test_mode:
+        bot.send_message(message.chat.id, "Тестовый режим уже включен.")
+        return
+    
+    test_mode = True
+    monitor_active = True
+    monitor_thread = threading.Thread(target=monitor_demo, daemon=True)
+    monitor_thread.start()
+    
+    bot.send_message(message.chat.id, 
+        "✅ Тестовый режим включен\n"
+        "Уведомления будут приходить каждую минуту\n"
+        "Для отключения используйте /testmode_off")
+
+@bot.message_handler(commands=['testmode_off'])
+def testmode_off_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        send_no_access(message)
+        return
+    
+    if not test_mode:
+        bot.send_message(message.chat.id, "Тестовый режим уже выключен.")
+        return
+    
+    test_mode = False
+    monitor_active = False
+    bot.send_message(message.chat.id, "❌ Тестовый режим выключен")
+
+@bot.message_handler(commands=['status'])
+def status_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        send_no_access(message)
+        return
+    
+    status = "✅ Включен" if test_mode else "❌ Выключен"
+    bot.send_message(message.chat.id, f"Статус тестового режима: {status}")
+
+@bot.message_handler(commands=['remove_sub'])
+def remove_subscriber_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        send_no_access(message)
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+        if storage.remove_subscriber(user_id):
+            bot.send_message(message.chat.id, f"Пользователь {user_id} удален из подписчиков.")
+            try:
+                bot.send_message(user_id, "Ваш доступ к уведомлениям отключен.")
+            except Exception:
+                pass
+        else:
+            bot.send_message(message.chat.id, f"Пользователь {user_id} не является подписчиком.")
+    except (IndexError, ValueError):
+        bot.send_message(message.chat.id, "Использование: /remove_sub <user_id>")
+
+@bot.message_handler(commands=['list_subs'])
+def list_subscribers_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        send_no_access(message)
+        return
+    
+    subscribers = storage.get_subscribers()
+    if not subscribers:
+        bot.send_message(message.chat.id, "Список подписчиков пуст.")
+        return
+    
+    message_text = "Список подписчиков:\n\n"
+    for user_id in subscribers:
+        message_text += f"ID: {user_id}\n"
+    bot.send_message(message.chat.id, message_text)
+
+@bot.message_handler(commands=['notify'])
+def notify_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        send_no_access(message)
+        return
+    
+    text = message.text.replace("/notify", "").strip()
+    if not text:
+        bot.send_message(message.chat.id, "Добавь текст после команды.")
+        return
+    send_notification(text)
+    bot.send_message(message.chat.id, "Уведомление отправлено.")

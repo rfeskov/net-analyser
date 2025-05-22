@@ -198,7 +198,11 @@ def start_handler(message):
         markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
         users_btn = telebot.types.KeyboardButton(
             "Выбрать пользователя", 
-            request_users={"request_id": 1}
+            request_users=telebot.types.KeyboardButtonRequestUsers(
+                request_id=1,
+                user_is_bot=False,
+                user_is_premium=None
+            )
         )
         markup.add(users_btn)
         

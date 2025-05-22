@@ -227,24 +227,27 @@ def handle_users_shared(message):
         send_no_access(message)
         return
 
-    print(f"Debug: users_shared data: {message.users_shared.__dict__}")
-    print(f"Debug: user_ids data: {message.users_shared.user_ids}")
-    
-    shared_user = message.users_shared.user_ids[0]
-    print(f"Debug: first shared_user data: {shared_user}")
-    
-    # Если shared_user это словарь, берем user_id из него
-    user_id = shared_user.get('user_id') if isinstance(shared_user, dict) else shared_user
-    print(f"Debug: extracted user_id: {user_id}")
+    # Получаем первого пользователя из списка
+    shared_user = message.users_shared.users[0]
+    user_id = shared_user.user_id
     
     if storage.add_subscriber(user_id):
-        name = shared_user.get('first_name', 'Неизвестный') if isinstance(shared_user, dict) else 'Пользователь'
+        # Формируем имя пользователя из доступных данных
+        name_parts = []
+        if shared_user.first_name:
+            name_parts.append(shared_user.first_name)
+        if shared_user.last_name:
+            name_parts.append(shared_user.last_name)
+        if shared_user.username:
+            name_parts.append(f"@{shared_user.username}")
+            
+        name = " ".join(name_parts) if name_parts else "Пользователь"
+        
         bot.reply_to(message, f"{name} (ID: {user_id}) добавлен в подписчики.")
         try:
             bot.send_message(user_id, "Вам предоставлен доступ к уведомлениям.")
         except Exception as e:
             bot.reply_to(message, f"Предупреждение: не удалось отправить сообщение пользователю {user_id}")
-            print(f"Debug: send message error: {str(e)}")
     else:
         bot.reply_to(message, f"Пользователь (ID: {user_id}) уже является подписчиком.")
 

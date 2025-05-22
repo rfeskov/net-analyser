@@ -388,7 +388,7 @@ async def send_notification_api(
 
 # ==== Запуск FastAPI в отдельном потоке ====
 def start_fastapi():
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 # Запускаем FastAPI в отдельном потоке
 threading.Thread(target=start_fastapi, daemon=True).start()

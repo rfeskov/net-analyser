@@ -227,15 +227,19 @@ def handle_users_shared(message):
         send_no_access(message)
         return
 
-    user_id = message.users_shared.user_ids[0]  # Берем первого выбранного пользователя
+    shared_user = message.users_shared.user_ids[0]
+    # Если shared_user это словарь, берем user_id из него
+    user_id = shared_user.get('user_id') if isinstance(shared_user, dict) else shared_user
+    
     if storage.add_subscriber(user_id):
-        bot.reply_to(message, f"Пользователь {user_id} добавлен в подписчики.")
+        name = shared_user.get('first_name', 'Неизвестный') if isinstance(shared_user, dict) else 'Пользователь'
+        bot.reply_to(message, f"{name} (ID: {user_id}) добавлен в подписчики.")
         try:
             bot.send_message(user_id, "Вам предоставлен доступ к уведомлениям.")
         except Exception as e:
             bot.reply_to(message, f"Предупреждение: не удалось отправить сообщение пользователю {user_id}")
     else:
-        bot.reply_to(message, f"Пользователь {user_id} уже является подписчиком.")
+        bot.reply_to(message, f"Пользователь (ID: {user_id}) уже является подписчиком.")
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
